@@ -52,6 +52,13 @@ uda = dict(
     # only a small fraction of images are labeled — the teacher is
     # unreliable early on and needs time to learn from labeled data
     pseudo_label_warmup_iters=1000,
+    # --- Prototype-based pseudo-label correction ---
+    # p^c_j = sum_i f_theta(PT_i) * a_ij
+    # Prototypes provide class-agnostic structural knowledge that
+    # corrects noisy teacher predictions via feature similarity
+    proto_correction=True,
+    proto_correction_alpha=0.5,
+    proto_correction_start_iter=1000,
     # --- DAPCN loss weights ---
     boundary_lambda=0.5,
     proto_lambda=0.1,

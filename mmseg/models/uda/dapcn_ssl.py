@@ -11,11 +11,16 @@
 #   - No ImageNet Feature Distance (removed in UDA version too)
 #   - Stronger pseudo-label confidence threshold (same domain →
 #     teacher predictions are more reliable earlier)
+#   - Prototype-based pseudo-label correction: prototypes learned
+#     by DynamicAnchorModule are projected through the decoder's
+#     classifier to produce class distributions, which are then
+#     blended with teacher predictions via pixel-prototype affinity.
 #
-# The training loop is structurally identical to UDA-DAPCN:
+# The training loop:
 #   1. Supervised loss on labeled images
 #   2. DAPCN losses (boundary + prototype) on labeled
 #   3. EMA teacher generates pseudo-labels on unlabeled
+#   3b. Prototype correction refines pseudo-labels (when enabled)
 #   4. ClassMix: labeled patches pasted onto unlabeled
 #   5. Mixed supervised loss
 #   6. DAPCN losses on mixed (target)
@@ -53,6 +58,26 @@ class DAPCN_SSL(UDADecorator):
     on labeled/unlabeled splits from the same domain instead of
     cross-domain source/target pairs.
 
+    Prototype-Based Pseudo-Label Correction:
+        The DynamicAnchorModule learns K dataset-level prototypes that
+        capture the distribution of the feature space *without* relying
+        on class labels. These prototypes can be projected through the
+        decoder's classifier f_theta (conv_seg) to obtain per-prototype
+        class probability distributions.
+
+        Given the soft assignment (adjacency) a_ij between pixel j and
+        prototype i, the corrected pseudo-label probability is:
+
+            p^c_j = sum_{i=1}^{K} f_theta(PT_i) * a_ij
+
+        This is then blended with the teacher's prediction:
+
+            p_final = (1 - beta) * p_teacher + beta * p^c
+
+        where beta is ``proto_correction_alpha``. The correction is
+        activated after ``proto_correction_start_iter`` to allow the
+        prototypes to stabilise before influencing pseudo-labels.
+
     Args:
         boundary_lambda (float): Weight for boundary loss. Default: 0.3.
         proto_lambda (float): Weight for prototype grouping loss. Default: 0.1.
@@ -69,6 +94,15 @@ class DAPCN_SSL(UDADecorator):
         pseudo_label_warmup_iters (int): Iterations before using pseudo
             labels at full weight. During warmup, pseudo_weight is scaled
             linearly from 0 to 1. Default: 0.
+        proto_correction (bool): Enable prototype-based pseudo-label
+            correction. Requires proto_lambda > 0. Default: True.
+        proto_correction_alpha (float): Blending weight between teacher
+            prediction and prototype-corrected prediction. 0 = teacher
+            only, 1 = prototype only. Default: 0.5.
+        proto_correction_start_iter (int): Start prototype correction
+            after this many iterations. Prototypes need time to learn
+            meaningful representations before they can correct pseudo-
+            labels. Default: 1000.
         dynamic_anchor (dict, optional): Config for DynamicAnchorModule.
         dapg_loss (dict, optional): Config for DAPGLoss.
         affinity_loss (dict, optional): Config for AffinityBoundaryLoss.
@@ -86,6 +120,10 @@ class DAPCN_SSL(UDADecorator):
                  hybrid_binary_weight=0.5,
                  ignore_index=255,
                  pseudo_label_warmup_iters=0,
+                 # Prototype pseudo-label correction
+                 proto_correction=True,
+                 proto_correction_alpha=0.5,
+                 proto_correction_start_iter=1000,
                  # Sub-module configs
                  dynamic_anchor=None,
                  dapg_loss=None,
@@ -117,6 +155,11 @@ class DAPCN_SSL(UDADecorator):
         self.hybrid_binary_weight = hybrid_binary_weight
         self.ignore_index = ignore_index
         self.pseudo_label_warmup_iters = pseudo_label_warmup_iters
+
+        # Prototype-based pseudo-label correction
+        self.proto_correction = proto_correction
+        self.proto_correction_alpha = proto_correction_alpha
+        self.proto_correction_start_iter = proto_correction_start_iter
 
         # EMA teacher model
         ema_cfg = deepcopy(cfg['model'])
@@ -226,6 +269,87 @@ class DAPCN_SSL(UDADecorator):
         if self.pseudo_label_warmup_iters <= 0:
             return 1.0
         return min(1.0, self.local_iter / self.pseudo_label_warmup_iters)
+
+    def _correct_pseudo_labels(self, target_img, target_img_metas,
+                               ema_softmax):
+        """Correct pseudo-labels using prototype-derived class distributions.
+
+        The DynamicAnchorModule learns K prototypes {PT_i} that capture
+        dataset-level feature structure without class supervision. By
+        passing these prototypes through the decoder's classifier f_theta
+        (conv_seg), we obtain per-prototype class distributions.
+
+        The corrected probability for each pixel j is computed as:
+
+            p^c_j = sum_{i=1}^{K} f_theta(PT_i) * a_ij
+
+        where a_ij is the soft assignment (adjacency) between pixel j
+        and prototype i, measuring their cosine similarity.
+
+        The final blended probability is:
+
+            p_final = (1 - alpha) * p_teacher + alpha * p^c
+
+        Args:
+            target_img (Tensor): Unlabeled images (B, 3, H, W).
+            target_img_metas (list[dict]): Image metadata.
+            ema_softmax (Tensor): Teacher's softmax predictions
+                (B, num_classes, H, W).
+
+        Returns:
+            Tensor: Corrected softmax probabilities (B, num_classes, H, W).
+        """
+        # --- Step 1: Extract student features from unlabeled images ---
+        # Use the student model's encoder (no gradient needed for correction)
+        with torch.no_grad():
+            student_feat = self.get_model().extract_feat(target_img)
+
+        # Get the final-scale decoder feature map
+        # DAFormerHead uses multiple_select, so student_feat is a list
+        decode_head = self.get_model().decode_head
+        feat = decode_head._transform_inputs(student_feat)
+        if isinstance(feat, list):
+            feat = feat[-1]
+        B, C_feat, Hf, Wf = feat.shape
+
+        # --- Step 2: Run DynamicAnchorModule to get prototypes and
+        #     soft assignments ---
+        # assign: (B*Hf*Wf, K), proto: (K, C), quality: (K,)
+        assign, proto, quality = self.dynamic_anchor(feat)
+
+        K = proto.shape[0]
+        N = B * Hf * Wf
+
+        # --- Step 3: Project prototypes through the classifier f_theta ---
+        # conv_seg: (channels, num_classes, 1, 1) — 1x1 convolution
+        # Reshape prototypes to (K, C, 1, 1) for conv2d compatibility
+        proto_4d = proto.unsqueeze(-1).unsqueeze(-1)  # (K, C, 1, 1)
+        proto_logits = decode_head.conv_seg(proto_4d)  # (K, num_classes, 1, 1)
+        proto_probs = torch.softmax(
+            proto_logits.squeeze(-1).squeeze(-1), dim=1)  # (K, num_classes)
+
+        # --- Step 4: Compute corrected pseudo-label probability ---
+        # p^c_j = sum_i a_ij * f_theta(PT_i)
+        # assign: (N, K), proto_probs: (K, num_classes)
+        corrected_probs = torch.mm(assign, proto_probs)  # (N, num_classes)
+
+        # Reshape to spatial format (B, num_classes, Hf, Wf)
+        num_classes = corrected_probs.shape[1]
+        corrected_probs = corrected_probs.reshape(
+            B, Hf, Wf, num_classes).permute(0, 3, 1, 2)
+
+        # Upsample to match teacher's resolution
+        _, _, H_tea, W_tea = ema_softmax.shape
+        if (Hf, Wf) != (H_tea, W_tea):
+            corrected_probs = F.interpolate(
+                corrected_probs, size=(H_tea, W_tea),
+                mode='bilinear', align_corners=False)
+
+        # --- Step 5: Blend teacher prediction with prototype correction ---
+        alpha = self.proto_correction_alpha
+        blended = (1 - alpha) * ema_softmax + alpha * corrected_probs
+
+        return blended
 
     def _compute_dapcn_losses(self, logits, seg_label, decoder_features,
                               is_labeled=True, pseudo_weight=None):
@@ -402,6 +526,23 @@ class DAPCN_SSL(UDADecorator):
         ema_logits = self.get_ema_model().encode_decode(
             target_img, target_img_metas)
         ema_softmax = torch.softmax(ema_logits.detach(), dim=1)
+
+        # === Step 3b: Prototype-based pseudo-label correction ===
+        # Correct teacher predictions using prototype class distributions.
+        # p^c_j = sum_i f_theta(PT_i) * a_ij
+        # Activated only when:
+        #   - proto_correction is enabled
+        #   - DynamicAnchorModule exists (proto_lambda > 0)
+        #   - Training has passed proto_correction_start_iter
+        use_correction = (
+            self.proto_correction
+            and self.dynamic_anchor is not None
+            and self.local_iter >= self.proto_correction_start_iter
+        )
+        if use_correction:
+            ema_softmax = self._correct_pseudo_labels(
+                target_img, target_img_metas, ema_softmax)
+
         pseudo_prob, pseudo_label = torch.max(ema_softmax, dim=1)
         ps_large_p = pseudo_prob.ge(self.pseudo_threshold).long() == 1
         ps_size = np.size(np.array(pseudo_label.cpu()))

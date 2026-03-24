@@ -21,6 +21,15 @@ uda = dict(
     # Warmup: ramp up pseudo-label weight over N iters
     # (teacher is unreliable early on with few labeled samples)
     pseudo_label_warmup_iters=1000,
+    # --- Prototype-based pseudo-label correction ---
+    # Correct teacher pseudo-labels using prototype class distributions:
+    #   p^c_j = sum_i f_theta(PT_i) * a_ij
+    # Prototypes are projected through conv_seg to obtain class probs,
+    # then blended with the teacher prediction via pixel-prototype
+    # adjacency (soft assignment from DynamicAnchorModule).
+    proto_correction=True,
+    proto_correction_alpha=0.5,
+    proto_correction_start_iter=1000,
     # --- DAPCN loss weights ---
     boundary_lambda=0.3,
     proto_lambda=0.1,

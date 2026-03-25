@@ -289,7 +289,26 @@ class DAPCN_SSL(UDADecorator):
                                      (1 - alpha_teacher) * param.data[:])
 
     def train_step(self, data_batch, optimizer, **kwargs):
-        """Single training iteration."""
+        """Single training iteration.
+
+        At ``proto_correction_start_iter``, Adam moment estimates for
+        DynAnchor parameters are reset.  Before this point the module
+        receives zero gradients (proto correction is inactive), so the
+        running first/second moments are biased toward zero.  Resetting
+        them prevents a destabilising spike when gradients suddenly
+        appear.
+        """
+        # Reset Adam state for DynAnchor params at activation boundary
+        if (self.dynamic_anchor is not None
+                and self.local_iter == self.proto_correction_start_iter):
+            for p in self.dynamic_anchor.parameters():
+                if p in optimizer.state:
+                    del optimizer.state[p]
+            if self.proto_to_decoder is not None:
+                for p in self.proto_to_decoder.parameters():
+                    if p in optimizer.state:
+                        del optimizer.state[p]
+
         optimizer.zero_grad()
         log_vars = self(**data_batch)
         optimizer.step()

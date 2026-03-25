@@ -103,14 +103,24 @@ data = dict(
             min_pixels=3000, class_temp=0.01, min_crop_ratio=0.5)))
 
 # --- Optimizer ---
+# DynAnchor prototypes: no weight decay (cluster centres should not be
+# pulled toward zero) and 10x LR (randomly initialised, and gradients
+# are attenuated through 3 EM iterations).
+# proto_to_decoder: same treatment (default anchor_after_fusion=False
+# implies Solution 1, so the linear projection layer exists).
+# quality_net: 10x LR to match the decode head.
 optimizer_config = None
 optimizer = dict(
     lr=6e-05,
     paramwise_cfg=dict(
-        custom_keys=dict(
-            head=dict(lr_mult=10.0),
-            pos_block=dict(decay_mult=0.0),
-            norm=dict(decay_mult=0.0))))
+        custom_keys={
+            'head': dict(lr_mult=10.0),
+            'dynamic_anchor.prototypes': dict(lr_mult=10.0, decay_mult=0.0),
+            'dynamic_anchor.quality_net': dict(lr_mult=10.0),
+            'proto_to_decoder': dict(lr_mult=10.0, decay_mult=0.0),
+            'pos_block': dict(decay_mult=0.0),
+            'norm': dict(decay_mult=0.0),
+        }))
 
 n_gpus = 1
 runner = dict(type='IterBasedRunner', max_iters=40000)

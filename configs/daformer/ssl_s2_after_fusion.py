@@ -59,8 +59,14 @@ uda = dict(
     proto_correction_start_iter=1000,
 
     # DAPCN loss weights
+    # NOTE: In Solution 2, DAPG loss gradients flow through
+    # _fuse_features() (embed_layers + SepASPP), adding a second
+    # gradient source to the decoder fusion layers on top of the
+    # segmentation loss.  Lower proto_lambda to compensate for
+    # the ~2-3x higher effective gradient on those shared layers
+    # compared to Solution 1 (where DAPG bypasses fusion entirely).
     boundary_lambda=0.5,
-    proto_lambda=0.1,
+    proto_lambda=0.05,
     boundary_loss_mode='affinity',
     boundary_mode='sobel',
     apply_boundary_on_target=True,
@@ -102,14 +108,31 @@ data = dict(
             min_pixels=3000, class_temp=0.01, min_crop_ratio=0.5)))
 
 # --- Optimizer ---
+# DynAnchor prototypes: no weight decay (cluster centres should not be
+# pulled toward zero) and 10x LR (randomly initialised, and gradients
+# are attenuated through 3 EM iterations).
+# quality_net: 10x LR to match the decode head.
+# Note: Solution 2 has no proto_to_decoder (prototypes already 256-d).
+#
+# GRADIENT COUPLING WARNING (Solution 2 only):
+# In S2, the decode head fusion layers (embed_layers, fuse_layer)
+# receive gradients from BOTH the segmentation loss AND the DAPG loss
+# (via _fuse_features).  In S1, DAPG bypasses fusion entirely.
+# This means 'head' lr_mult=10.0 amplifies a larger combined gradient
+# in S2.  We compensate by halving proto_lambda (0.05 vs 0.1 in S1)
+# rather than changing lr_mult, to keep the segmentation learning
+# dynamics identical across solutions.
 optimizer_config = None
 optimizer = dict(
     lr=6e-05,
     paramwise_cfg=dict(
-        custom_keys=dict(
-            head=dict(lr_mult=10.0),
-            pos_block=dict(decay_mult=0.0),
-            norm=dict(decay_mult=0.0))))
+        custom_keys={
+            'head': dict(lr_mult=10.0),
+            'dynamic_anchor.prototypes': dict(lr_mult=10.0, decay_mult=0.0),
+            'dynamic_anchor.quality_net': dict(lr_mult=10.0),
+            'pos_block': dict(decay_mult=0.0),
+            'norm': dict(decay_mult=0.0),
+        }))
 
 n_gpus = 1
 runner = dict(type='IterBasedRunner', max_iters=40000)

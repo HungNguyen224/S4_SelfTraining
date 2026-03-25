@@ -1,0 +1,60 @@
+\subsection{Prototype-Based Pseudo-Label Correction}
+\label{sec:pseudo_label_correction}
+
+In semi-supervised self-training, the EMA teacher generates pseudo-labels based solely on its predictive confidence. However, when labeled data is scarce, the teacher's predictions exhibit systematic biases---particularly for under-represented classes and ambiguous boundary regions---leading to confirmation bias that degrades the student's learning. To mitigate this limitation, we propose a prototype-based pseudo-label correction mechanism that leverages the structural knowledge captured by the Dynamic Anchor Module to regularise the teacher's predictions.
+
+\subsubsection{Motivation}
+
+The Dynamic Anchor Module maintains $K$ class-agnostic prototypes $\{\mathbf{P}_i\}_{i=1}^{K}$ that are learned through differentiable Expectation-Maximisation refinement over the decoder's feature space. These prototypes capture the dataset-level feature distribution without relying on class labels, and are continuously shaped by the prototype grouping loss $\mathcal{L}_{\text{DAPG}}$ applied to labeled images. Since the prototypes reside in the same $C$-dimensional feature space as the decoder output, they can be projected through the decoder's classification head to yield class probability distributions. This provides a complementary supervisory signal that is grounded in the global feature structure rather than local pixel-wise predictions.
+
+\subsubsection{Formulation}
+
+Let $\mathbf{z}_j \in \mathbb{R}^C$ denote the decoder feature vector at spatial position $j$, and let $\mathbf{P}_i \in \mathbb{R}^C$ denote the $i$-th prototype. The soft assignment between pixel $j$ and prototype $i$ is computed via temperature-scaled cosine similarity:
+\begin{equation}
+    a_{ij} = \frac{\exp\bigl(\text{sim}(\mathbf{z}_j, \mathbf{P}_i) / \tau\bigr)}{\sum_{k=1}^{K} \exp\bigl(\text{sim}(\mathbf{z}_j, \mathbf{P}_k) / \tau\bigr)},
+    \label{eq:soft_assignment}
+\end{equation}
+where $\text{sim}(\cdot, \cdot)$ denotes the cosine similarity and $\tau$ is the temperature parameter.
+
+Each prototype is projected into the class probability space through the decoder's classifier $f_\theta$, which consists of a $1 \times 1$ convolution mapping $\mathbb{R}^C \to \mathbb{R}^{N_c}$ followed by a softmax normalisation:
+\begin{equation}
+    \mathbf{q}_i = \text{softmax}\bigl(f_\theta(\mathbf{P}_i)\bigr) \in \mathbb{R}^{N_c},
+    \label{eq:proto_projection}
+\end{equation}
+where $N_c$ is the number of semantic classes. This projection is valid because the prototypes and the decoder features share the same $C$-dimensional embedding space by construction, and $f_\theta$ acts as a linear classifier over this space.
+
+The prototype-corrected class probability for pixel $j$ is then obtained as a weighted combination of all prototype class distributions:
+\begin{equation}
+    \hat{p}_j^{c} = \sum_{i=1}^{K} a_{ij} \cdot \mathbf{q}_i^{c}, \quad \forall \, c \in \{1, \ldots, N_c\},
+    \label{eq:corrected_prob}
+\end{equation}
+where $\mathbf{q}_i^{c}$ denotes the $c$-th component of $\mathbf{q}_i$. In matrix form, this can be expressed as $\hat{\mathbf{P}} = \mathbf{A} \mathbf{Q}$, where $\mathbf{A} \in \mathbb{R}^{N \times K}$ is the assignment matrix and $\mathbf{Q} \in \mathbb{R}^{K \times N_c}$ is the matrix of prototype class distributions.
+
+The final corrected pseudo-label distribution is obtained by blending the teacher's prediction with the prototype-derived correction:
+\begin{equation}
+    \tilde{p}_j = (1 - \alpha)\, p_j^{\text{tea}} + \alpha\, \hat{p}_j,
+    \label{eq:blending}
+\end{equation}
+where $p_j^{\text{tea}}$ is the EMA teacher's softmax prediction at pixel $j$, and $\alpha \in [0, 1]$ controls the correction strength. The hard pseudo-label and its associated confidence weight are subsequently derived from $\tilde{p}_j$:
+\begin{equation}
+    \hat{y}_j = \arg\max_c \, \tilde{p}_j^{c}, \qquad
+    w_j = \max_c \, \tilde{p}_j^{c}.
+    \label{eq:hard_pseudo}
+\end{equation}
+
+\subsubsection{Delayed Activation}
+
+The correction mechanism is activated only after a warm-up period of $T_{\text{start}}$ iterations. During the initial training phase, the prototypes are still being shaped by $\mathcal{L}_{\text{DAPG}}$ through labeled supervision, and their class projections are unreliable. Enabling correction prematurely would inject noise from uninformed prototypes into the pseudo-labels, potentially destabilising the self-training loop. Formally, the correction is applied when:
+\begin{equation}
+    \tilde{p}_j =
+    \begin{cases}
+        (1 - \alpha)\, p_j^{\text{tea}} + \alpha\, \hat{p}_j, & \text{if } t \geq T_{\text{start}}, \\
+        p_j^{\text{tea}}, & \text{otherwise},
+    \end{cases}
+    \label{eq:delayed_activation}
+\end{equation}
+where $t$ denotes the current training iteration.
+
+\subsubsection{Effect on the Training Pipeline}
+
+The correction operates at the probability level, prior to the derivation of hard pseudo-labels and confidence weights. Consequently, it simultaneously influences three downstream quantities: (i)~the hard pseudo-label $\hat{y}_j$, whose argmax class assignment may change when prototype correction shifts the dominant class probability; (ii)~the pixel-wise confidence weight $w_j$, which determines whether a pixel exceeds the reliability threshold $\tau$; and (iii)~the mixed supervision target after ClassMix augmentation, since both pseudo-labels and confidence weights propagate through the class-based spatial mixing. This design ensures that the structural knowledge encoded in the prototypes permeates the entire self-training pathway without requiring architectural modifications to the student or teacher networks.

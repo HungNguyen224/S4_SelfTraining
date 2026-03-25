@@ -1,0 +1,359 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 820" font-family="Arial, Helvetica, sans-serif">
+  <defs>
+    <!-- Arrow marker -->
+    <marker id="arrow" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#333"/>
+    </marker>
+    <marker id="arrow-blue" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#2563EB"/>
+    </marker>
+    <marker id="arrow-red" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#DC2626"/>
+    </marker>
+    <marker id="arrow-green" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#059669"/>
+    </marker>
+    <marker id="arrow-purple" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#7C3AED"/>
+    </marker>
+    <marker id="arrow-orange" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#D97706"/>
+    </marker>
+    <!-- Dashed arrow for EMA -->
+    <marker id="arrow-dash" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#6B7280"/>
+    </marker>
+
+    <!-- Gradient backgrounds -->
+    <linearGradient id="grad-encoder" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#DBEAFE;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#BFDBFE;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="grad-decoder" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#E0E7FF;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#C7D2FE;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="grad-teacher" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#FEE2E2;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#FECACA;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="grad-proto" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#EDE9FE;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#DDD6FE;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="grad-loss" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#FEF3C7;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#FDE68A;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="grad-mix" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#D1FAE5;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#A7F3D0;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1200" height="820" fill="#FAFAFA" rx="8"/>
+
+  <!-- Title -->
+  <text x="600" y="32" text-anchor="middle" font-size="18" font-weight="bold" fill="#1F2937">DAPCN Semi-Supervised Training Architecture</text>
+
+  <!-- ============================================================ -->
+  <!-- INPUT SECTION -->
+  <!-- ============================================================ -->
+  <!-- Labeled input -->
+  <rect x="30" y="58" width="110" height="52" rx="6" fill="#DBEAFE" stroke="#2563EB" stroke-width="1.5"/>
+  <text x="85" y="78" text-anchor="middle" font-size="11" font-weight="bold" fill="#1E40AF">Labeled</text>
+  <text x="85" y="93" text-anchor="middle" font-size="9.5" fill="#3B82F6">(x&#x2097;, y&#x2097;)</text>
+
+  <!-- Unlabeled input -->
+  <rect x="30" y="128" width="110" height="52" rx="6" fill="#FEE2E2" stroke="#DC2626" stroke-width="1.5"/>
+  <text x="85" y="148" text-anchor="middle" font-size="11" font-weight="bold" fill="#991B1B">Unlabeled</text>
+  <text x="85" y="163" text-anchor="middle" font-size="9.5" fill="#DC2626">x&#x1D64;</text>
+
+  <!-- ============================================================ -->
+  <!-- STUDENT MODEL (Top pathway — Labeled) -->
+  <!-- ============================================================ -->
+  <!-- Student Encoder -->
+  <rect x="188" y="52" width="140" height="64" rx="6" fill="url(#grad-encoder)" stroke="#2563EB" stroke-width="1.5"/>
+  <text x="258" y="74" text-anchor="middle" font-size="11" font-weight="bold" fill="#1E40AF">MiT-B5 Encoder</text>
+  <text x="258" y="89" text-anchor="middle" font-size="9" fill="#3B82F6">(Student)</text>
+  <text x="258" y="103" text-anchor="middle" font-size="8" fill="#6B7280">[64,128,320,512]</text>
+
+  <!-- Arrow: Labeled → Student Encoder -->
+  <line x1="140" y1="84" x2="185" y2="84" stroke="#333" stroke-width="1.3" marker-end="url(#arrow)"/>
+
+  <!-- Student Decoder -->
+  <rect x="370" y="52" width="130" height="64" rx="6" fill="url(#grad-decoder)" stroke="#4F46E5" stroke-width="1.5"/>
+  <text x="435" y="72" text-anchor="middle" font-size="11" font-weight="bold" fill="#3730A3">DAFormerHead</text>
+  <text x="435" y="86" text-anchor="middle" font-size="9" fill="#4F46E5">SepASPP Fusion</text>
+  <text x="435" y="100" text-anchor="middle" font-size="8" fill="#6B7280">→ 256-d → conv_seg</text>
+
+  <!-- Arrow: Student Encoder → Decoder -->
+  <line x1="328" y1="84" x2="367" y2="84" stroke="#333" stroke-width="1.3" marker-end="url(#arrow)"/>
+
+  <!-- Segmentation output (labeled) -->
+  <rect x="540" y="58" width="80" height="50" rx="6" fill="#F0FDF4" stroke="#059669" stroke-width="1.2"/>
+  <text x="580" y="78" text-anchor="middle" font-size="10" font-weight="bold" fill="#065F46">ŷ&#x2097;</text>
+  <text x="580" y="93" text-anchor="middle" font-size="8" fill="#059669">Prediction</text>
+
+  <!-- Arrow: Decoder → Seg output -->
+  <line x1="500" y1="84" x2="537" y2="84" stroke="#333" stroke-width="1.3" marker-end="url(#arrow)"/>
+
+  <!-- ============================================================ -->
+  <!-- LOSSES (Labeled) — Step 1 + Step 2 -->
+  <!-- ============================================================ -->
+  <!-- L_CE labeled -->
+  <rect x="660" y="50" width="104" height="34" rx="5" fill="url(#grad-loss)" stroke="#D97706" stroke-width="1.3"/>
+  <text x="712" y="72" text-anchor="middle" font-size="10" font-weight="bold" fill="#92400E">L&#x1D9E;&#x1D31; (labeled)</text>
+
+  <!-- Arrow: ŷ_l → L_CE -->
+  <line x1="620" y1="74" x2="657" y2="70" stroke="#D97706" stroke-width="1.3" marker-end="url(#arrow-orange)"/>
+
+  <!-- L_DAPCN labeled (boundary + proto) -->
+  <rect x="660" y="92" width="104" height="34" rx="5" fill="url(#grad-loss)" stroke="#D97706" stroke-width="1.3"/>
+  <text x="712" y="106" text-anchor="middle" font-size="9" font-weight="bold" fill="#92400E">L&#x2090;&#x209B;&#x209B;</text>
+  <text x="712" y="118" text-anchor="middle" font-size="8" fill="#B45309">+ L&#x1D30;&#x1D2C;&#x1D3E;&#x1D33;</text>
+
+  <!-- Arrow: Features → L_DAPCN -->
+  <path d="M500,92 L540,108 L657,108" fill="none" stroke="#D97706" stroke-width="1.2" marker-end="url(#arrow-orange)"/>
+
+  <!-- GT label arrow to L_CE -->
+  <text x="642" y="50" text-anchor="middle" font-size="8" fill="#6B7280">y&#x2097;</text>
+
+  <!-- ============================================================ -->
+  <!-- EMA TEACHER (Middle pathway — Unlabeled) -->
+  <!-- ============================================================ -->
+  <!-- Teacher block -->
+  <rect x="188" y="150" width="312" height="56" rx="6" fill="url(#grad-teacher)" stroke="#DC2626" stroke-width="1.5"/>
+  <text x="344" y="172" text-anchor="middle" font-size="11" font-weight="bold" fill="#991B1B">EMA Teacher</text>
+  <text x="344" y="187" text-anchor="middle" font-size="9" fill="#DC2626">MiT-B5 + DAFormerHead (frozen, no grad)</text>
+  <text x="344" y="199" text-anchor="middle" font-size="8" fill="#6B7280">θ&#x209C; ← α·θ&#x209C; + (1−α)·θ&#x209B;</text>
+
+  <!-- Arrow: Unlabeled → Teacher -->
+  <line x1="140" y1="154" x2="185" y2="168" stroke="#DC2626" stroke-width="1.3" marker-end="url(#arrow-red)"/>
+
+  <!-- EMA dashed arrow from Student to Teacher -->
+  <path d="M258,116 L258,147" fill="none" stroke="#6B7280" stroke-width="1.2" stroke-dasharray="5,3" marker-end="url(#arrow-dash)"/>
+  <text x="272" y="136" font-size="7.5" fill="#6B7280">EMA</text>
+
+  <!-- Teacher softmax output -->
+  <rect x="540" y="150" width="95" height="50" rx="6" fill="#FFF1F2" stroke="#DC2626" stroke-width="1.2"/>
+  <text x="588" y="170" text-anchor="middle" font-size="10" font-weight="bold" fill="#991B1B">p&#x1D57;&#x1D49;&#x1D43;</text>
+  <text x="588" y="185" text-anchor="middle" font-size="8" fill="#DC2626">softmax(logits)</text>
+
+  <!-- Arrow: Teacher → softmax -->
+  <line x1="500" y1="178" x2="537" y2="175" stroke="#DC2626" stroke-width="1.3" marker-end="url(#arrow-red)"/>
+
+  <!-- ============================================================ -->
+  <!-- PROTOTYPE CORRECTION (Step 3b) -->
+  <!-- ============================================================ -->
+  <!-- Big correction box -->
+  <rect x="160" y="230" width="530" height="155" rx="8" fill="url(#grad-proto)" stroke="#7C3AED" stroke-width="1.8" stroke-dasharray="6,3"/>
+  <text x="425" y="252" text-anchor="middle" font-size="12" font-weight="bold" fill="#5B21B6">Prototype-Based Pseudo-Label Correction (Step 3b)</text>
+  <text x="425" y="267" text-anchor="middle" font-size="8.5" fill="#7C3AED" font-style="italic">Activated when t ≥ T_start</text>
+
+  <!-- Student encoder (re-use for unlabeled features) -->
+  <rect x="178" y="282" width="108" height="44" rx="5" fill="#EEF2FF" stroke="#4F46E5" stroke-width="1.2"/>
+  <text x="232" y="300" text-anchor="middle" font-size="9" font-weight="bold" fill="#3730A3">Student Feat</text>
+  <text x="232" y="314" text-anchor="middle" font-size="8" fill="#6B7280">F&#x1D64; (512-d)</text>
+
+  <!-- DynamicAnchorModule -->
+  <rect x="310" y="282" width="130" height="44" rx="5" fill="#F5F3FF" stroke="#7C3AED" stroke-width="1.3"/>
+  <text x="375" y="298" text-anchor="middle" font-size="9.5" font-weight="bold" fill="#5B21B6">DynAnchor</text>
+  <text x="375" y="312" text-anchor="middle" font-size="8" fill="#7C3AED">K prototypes (512-d)</text>
+
+  <!-- Arrow: Feat → DynAnchor -->
+  <line x1="286" y1="304" x2="307" y2="304" stroke="#7C3AED" stroke-width="1.2" marker-end="url(#arrow-purple)"/>
+
+  <!-- Projection layer -->
+  <rect x="310" y="338" width="130" height="36" rx="5" fill="#FDF4FF" stroke="#A855F7" stroke-width="1.2"/>
+  <text x="375" y="354" text-anchor="middle" font-size="9" font-weight="bold" fill="#7E22CE">Linear 512→256</text>
+  <text x="375" y="366" text-anchor="middle" font-size="7.5" fill="#A855F7">proto_to_decoder</text>
+
+  <!-- Arrow: DynAnchor → Projection -->
+  <line x1="375" y1="326" x2="375" y2="335" stroke="#7C3AED" stroke-width="1.2" marker-end="url(#arrow-purple)"/>
+
+  <!-- conv_seg projection -->
+  <rect x="468" y="282" width="100" height="44" rx="5" fill="#EEF2FF" stroke="#4F46E5" stroke-width="1.2"/>
+  <text x="518" y="298" text-anchor="middle" font-size="9" font-weight="bold" fill="#3730A3">conv_seg</text>
+  <text x="518" y="312" text-anchor="middle" font-size="8" fill="#4F46E5">256→N&#x1D9C; classes</text>
+
+  <!-- Arrow: Projection → conv_seg -->
+  <path d="M440,356 L468,356 L468,326 L468,310" fill="none" stroke="#7C3AED" stroke-width="1.2"/>
+  <line x1="456" y1="310" x2="465" y2="310" stroke="#7C3AED" stroke-width="1.2" marker-end="url(#arrow-purple)"/>
+
+  <!-- Soft assignment label -->
+  <text x="232" y="342" text-anchor="middle" font-size="8.5" fill="#5B21B6">a&#x1D62;&#x2C7C; (soft assign)</text>
+  <path d="M232,324 L232,350 L250,350" fill="none" stroke="#7C3AED" stroke-width="1" stroke-dasharray="3,2"/>
+
+  <!-- Blending box -->
+  <rect x="580" y="282" width="95" height="44" rx="5" fill="#FAF5FF" stroke="#7C3AED" stroke-width="1.3"/>
+  <text x="628" y="298" text-anchor="middle" font-size="9" font-weight="bold" fill="#5B21B6">Blend</text>
+  <text x="628" y="312" text-anchor="middle" font-size="7.5" fill="#7C3AED">(1−α)p&#x1D57;&#x1D49;&#x1D43;+αp̂</text>
+
+  <!-- Arrow: conv_seg → Blend -->
+  <line x1="568" y1="304" x2="577" y2="304" stroke="#7C3AED" stroke-width="1.2" marker-end="url(#arrow-purple)"/>
+
+  <!-- Arrow: p_tea → Blend -->
+  <path d="M588,200 L628,200 L628,279" fill="none" stroke="#DC2626" stroke-width="1.2" marker-end="url(#arrow-red)"/>
+
+  <!-- Formula annotation: sum a_ij * q_i -->
+  <text x="500" y="340" text-anchor="middle" font-size="8" fill="#5B21B6" font-style="italic">q&#x1D62; = softmax(f&#x1D73;(P&#x1D62;))</text>
+  <text x="500" y="354" text-anchor="middle" font-size="8" fill="#5B21B6" font-style="italic">p̂&#x2C7C; = Σ a&#x1D62;&#x2C7C;·q&#x1D62;</text>
+
+  <!-- Corrected output -->
+  <rect x="700" y="285" width="70" height="38" rx="5" fill="#F3E8FF" stroke="#7C3AED" stroke-width="1.3"/>
+  <text x="735" y="302" text-anchor="middle" font-size="9.5" font-weight="bold" fill="#5B21B6">p̃</text>
+  <text x="735" y="315" text-anchor="middle" font-size="7.5" fill="#7C3AED">corrected</text>
+
+  <!-- Arrow: Blend → Corrected -->
+  <line x1="675" y1="304" x2="697" y2="304" stroke="#7C3AED" stroke-width="1.3" marker-end="url(#arrow-purple)"/>
+
+  <!-- ============================================================ -->
+  <!-- PSEUDO-LABEL DERIVATION -->
+  <!-- ============================================================ -->
+  <rect x="800" y="260" width="140" height="68" rx="6" fill="#FFF7ED" stroke="#EA580C" stroke-width="1.3"/>
+  <text x="870" y="280" text-anchor="middle" font-size="10" font-weight="bold" fill="#9A3412">Pseudo-Label</text>
+  <text x="870" y="295" text-anchor="middle" font-size="8.5" fill="#EA580C">ŷ = argmax(p̃)</text>
+  <text x="870" y="308" text-anchor="middle" font-size="8.5" fill="#EA580C">w = max(p̃) · γ</text>
+  <text x="870" y="320" text-anchor="middle" font-size="7.5" fill="#9A3412">γ = min(1, t/T&#x2B7;)</text>
+
+  <!-- Arrow: Corrected → Pseudo-label -->
+  <line x1="770" y1="304" x2="797" y2="294" stroke="#333" stroke-width="1.3" marker-end="url(#arrow)"/>
+
+  <!-- ============================================================ -->
+  <!-- CLASSMIX (Step 4) -->
+  <!-- ============================================================ -->
+  <rect x="370" y="420" width="260" height="68" rx="6" fill="url(#grad-mix)" stroke="#059669" stroke-width="1.5"/>
+  <text x="500" y="442" text-anchor="middle" font-size="12" font-weight="bold" fill="#065F46">ClassMix (Step 4)</text>
+  <text x="500" y="458" text-anchor="middle" font-size="9" fill="#059669">x&#x2098; = M⊙x&#x2097; + (1−M)⊙x&#x1D64;</text>
+  <text x="500" y="472" text-anchor="middle" font-size="9" fill="#059669">y&#x2098; = M⊙y&#x2097; + (1−M)⊙ŷ&#x1D64;</text>
+  <text x="500" y="482" text-anchor="middle" font-size="8" fill="#6B7280">+ Strong Aug (color jitter, blur)</text>
+
+  <!-- Arrow: Labeled → ClassMix -->
+  <path d="M85,110 L85,454 L367,454" fill="none" stroke="#2563EB" stroke-width="1.2" marker-end="url(#arrow-blue)"/>
+  <text x="95" y="290" font-size="8" fill="#2563EB">x&#x2097;, y&#x2097;</text>
+
+  <!-- Arrow: Unlabeled → ClassMix -->
+  <path d="M120,180 L120,438 L367,438" fill="none" stroke="#DC2626" stroke-width="1.2" marker-end="url(#arrow-red)"/>
+  <text x="130" y="330" font-size="8" fill="#DC2626">x&#x1D64;</text>
+
+  <!-- Arrow: Pseudo-label → ClassMix -->
+  <path d="M870,328 L870,404 L750,404 L630,440" fill="none" stroke="#EA580C" stroke-width="1.2" marker-end="url(#arrow-orange)"/>
+  <text x="800" y="400" font-size="8" fill="#EA580C">ŷ&#x1D64;, w</text>
+
+  <!-- ============================================================ -->
+  <!-- MIXED FORWARD (Step 5) — Student processes mixed images -->
+  <!-- ============================================================ -->
+  <!-- Student Encoder (mixed) -->
+  <rect x="188" y="530" width="140" height="56" rx="6" fill="url(#grad-encoder)" stroke="#2563EB" stroke-width="1.5"/>
+  <text x="258" y="550" text-anchor="middle" font-size="11" font-weight="bold" fill="#1E40AF">MiT-B5 Encoder</text>
+  <text x="258" y="565" text-anchor="middle" font-size="9" fill="#3B82F6">(Student, shared θ&#x209B;)</text>
+  <text x="258" y="578" text-anchor="middle" font-size="8" fill="#6B7280">[64,128,320,512]</text>
+
+  <!-- Arrow: ClassMix → Student Encoder (mixed) -->
+  <path d="M435,488 L435,510 L280,510 L280,527" fill="none" stroke="#059669" stroke-width="1.3" marker-end="url(#arrow-green)"/>
+  <text x="360" y="506" font-size="8" fill="#059669">x&#x2098;</text>
+
+  <!-- Student Decoder (mixed) -->
+  <rect x="370" y="530" width="130" height="56" rx="6" fill="url(#grad-decoder)" stroke="#4F46E5" stroke-width="1.5"/>
+  <text x="435" y="550" text-anchor="middle" font-size="11" font-weight="bold" fill="#3730A3">DAFormerHead</text>
+  <text x="435" y="565" text-anchor="middle" font-size="9" fill="#4F46E5">SepASPP Fusion</text>
+  <text x="435" y="578" text-anchor="middle" font-size="8" fill="#6B7280">→ 256-d → conv_seg</text>
+
+  <!-- Arrow: Encoder → Decoder (mixed) -->
+  <line x1="328" y1="558" x2="367" y2="558" stroke="#333" stroke-width="1.3" marker-end="url(#arrow)"/>
+
+  <!-- Mixed prediction -->
+  <rect x="540" y="536" width="80" height="44" rx="6" fill="#F0FDF4" stroke="#059669" stroke-width="1.2"/>
+  <text x="580" y="556" text-anchor="middle" font-size="10" font-weight="bold" fill="#065F46">ŷ&#x2098;</text>
+  <text x="580" y="569" text-anchor="middle" font-size="8" fill="#059669">Mixed pred</text>
+
+  <!-- Arrow: Decoder → Mixed pred -->
+  <line x1="500" y1="558" x2="537" y2="558" stroke="#333" stroke-width="1.3" marker-end="url(#arrow)"/>
+
+  <!-- ============================================================ -->
+  <!-- LOSSES (Mixed) — Step 5 + Step 6 -->
+  <!-- ============================================================ -->
+  <!-- L_CE mixed -->
+  <rect x="660" y="526" width="104" height="34" rx="5" fill="url(#grad-loss)" stroke="#D97706" stroke-width="1.3"/>
+  <text x="712" y="548" text-anchor="middle" font-size="10" font-weight="bold" fill="#92400E">L&#x1D9E;&#x1D31; (mixed)</text>
+
+  <!-- Arrow: ŷ_m → L_CE_m -->
+  <line x1="620" y1="550" x2="657" y2="546" stroke="#D97706" stroke-width="1.3" marker-end="url(#arrow-orange)"/>
+
+  <!-- L_DAPCN mixed -->
+  <rect x="660" y="568" width="104" height="34" rx="5" fill="url(#grad-loss)" stroke="#D97706" stroke-width="1.3"/>
+  <text x="712" y="582" text-anchor="middle" font-size="9" font-weight="bold" fill="#92400E">L&#x2090;&#x209B;&#x209B;</text>
+  <text x="712" y="594" text-anchor="middle" font-size="8" fill="#B45309">+ L&#x1D30;&#x1D2C;&#x1D3E;&#x1D33;</text>
+
+  <!-- Arrow: Features → L_DAPCN mixed -->
+  <path d="M500,572 L540,584 L657,584" fill="none" stroke="#D97706" stroke-width="1.2" marker-end="url(#arrow-orange)"/>
+
+  <!-- w_mix label -->
+  <text x="645" y="560" text-anchor="end" font-size="7.5" fill="#6B7280">w&#x2098;&#x2097;&#x2093;</text>
+
+  <!-- y_mix, w_mix → losses -->
+  <path d="M565,488 L700,488 L700,524" fill="none" stroke="#059669" stroke-width="1" stroke-dasharray="3,2" marker-end="url(#arrow-green)"/>
+  <text x="630" y="500" font-size="7.5" fill="#059669">y&#x2098;, w&#x2098;</text>
+
+  <!-- ============================================================ -->
+  <!-- TOTAL LOSS & OPTIMIZER -->
+  <!-- ============================================================ -->
+  <rect x="830" y="510" width="175" height="75" rx="8" fill="#FEF9C3" stroke="#CA8A04" stroke-width="1.8"/>
+  <text x="918" y="534" text-anchor="middle" font-size="11" font-weight="bold" fill="#854D0E">Total Loss &amp; Update</text>
+  <text x="918" y="552" text-anchor="middle" font-size="8.5" fill="#A16207">L = L&#x1D9E;&#x1D31;ˡ + L&#x1D30;&#x1D2C;&#x1D3E;&#x1D33;ˡ + L&#x2090;&#x209B;&#x209B;ˡ</text>
+  <text x="918" y="566" text-anchor="middle" font-size="8.5" fill="#A16207">  + L&#x1D9E;&#x1D31;ᵐ + L&#x1D30;&#x1D2C;&#x1D3E;&#x1D33;ᵐ + L&#x2090;&#x209B;&#x209B;ᵐ</text>
+  <text x="918" y="580" text-anchor="middle" font-size="8.5" fill="#854D0E">θ&#x209B; ← θ&#x209B; − η·AdamW(∇L)</text>
+
+  <!-- Arrows: losses → total -->
+  <line x1="764" y1="67" x2="850" y2="67" stroke="#D97706" stroke-width="1" />
+  <line x1="764" y1="109" x2="850" y2="109" stroke="#D97706" stroke-width="1" />
+  <path d="M850,67 L850,109 L850,507" fill="none" stroke="#D97706" stroke-width="1.3" marker-end="url(#arrow-orange)"/>
+
+  <line x1="764" y1="543" x2="827" y2="543" stroke="#D97706" stroke-width="1.3" marker-end="url(#arrow-orange)"/>
+  <line x1="764" y1="585" x2="810" y2="585" stroke="#D97706" stroke-width="1" />
+  <path d="M810,585 L810,560 L827,560" fill="none" stroke="#D97706" stroke-width="1" marker-end="url(#arrow-orange)"/>
+
+  <!-- ============================================================ -->
+  <!-- LEGEND -->
+  <!-- ============================================================ -->
+  <rect x="30" y="640" width="1140" height="165" rx="8" fill="#F9FAFB" stroke="#D1D5DB" stroke-width="1"/>
+  <text x="600" y="662" text-anchor="middle" font-size="12" font-weight="bold" fill="#374151">Architecture Components &amp; Data Flow</text>
+
+  <!-- Row 1 -->
+  <rect x="55" y="678" width="24" height="14" rx="3" fill="#DBEAFE" stroke="#2563EB" stroke-width="1"/>
+  <text x="88" y="690" font-size="9" fill="#333">Encoder (MiT-B5, 4 scales: 64/128/320/512)</text>
+
+  <rect x="340" y="678" width="24" height="14" rx="3" fill="#E0E7FF" stroke="#4F46E5" stroke-width="1"/>
+  <text x="373" y="690" font-size="9" fill="#333">Decoder (DAFormerHead, SepASPP → 256-d)</text>
+
+  <rect x="640" y="678" width="24" height="14" rx="3" fill="#FEE2E2" stroke="#DC2626" stroke-width="1"/>
+  <text x="673" y="690" font-size="9" fill="#333">EMA Teacher (frozen copy, momentum α=0.999)</text>
+
+  <rect x="960" y="678" width="24" height="14" rx="3" fill="#EDE9FE" stroke="#7C3AED" stroke-width="1"/>
+  <text x="993" y="690" font-size="9" fill="#333">Prototype Module</text>
+
+  <!-- Row 2 -->
+  <rect x="55" y="706" width="24" height="14" rx="3" fill="#D1FAE5" stroke="#059669" stroke-width="1"/>
+  <text x="88" y="718" font-size="9" fill="#333">ClassMix Augmentation</text>
+
+  <rect x="340" y="706" width="24" height="14" rx="3" fill="#FEF3C7" stroke="#D97706" stroke-width="1"/>
+  <text x="373" y="718" font-size="9" fill="#333">Loss Functions</text>
+
+  <rect x="640" y="706" width="24" height="14" rx="3" fill="#FEF9C3" stroke="#CA8A04" stroke-width="1"/>
+  <text x="673" y="718" font-size="9" fill="#333">Total Loss &amp; Optimizer</text>
+
+  <line x1="960" y1="713" x2="984" y2="713" stroke="#6B7280" stroke-width="1.2" stroke-dasharray="5,3"/>
+  <text x="993" y="718" font-size="9" fill="#333">EMA weight transfer</text>
+
+  <!-- Row 3: Dimension trace -->
+  <text x="55" y="746" font-size="9.5" font-weight="bold" fill="#374151">Dimension trace:</text>
+  <text x="55" y="762" font-size="9" fill="#555">Encoder: [64, 128, 320, 512] → Decoder fusion: 1024→256 → conv_seg: 256→N&#x1D9C;</text>
+  <text x="55" y="778" font-size="9" fill="#555">Prototypes: K×512 → Linear(512,256) → conv_seg(256,N&#x1D9C;) → softmax → q&#x1D62; ∈ ℝ&#x004E;&#x1D9C;</text>
+
+  <!-- Row 4: Steps -->
+  <text x="55" y="796" font-size="9" font-weight="bold" fill="#374151">Training steps:</text>
+  <text x="175" y="796" font-size="8.5" fill="#555">❶ Supervised CE  ❷ DAPCN (labeled)  ❸ Teacher → pseudo-labels  ❸b Prototype correction  ❹ ClassMix  ❺ Mixed CE  ❻ DAPCN (mixed)</text>
+
+</svg>

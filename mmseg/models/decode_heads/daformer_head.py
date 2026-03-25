@@ -155,30 +155,35 @@ class DAFormerHead(BaseDecodeHead):
         self.fuse_layer = build_layer(
             sum(embed_dims), self.channels, **fusion_cfg)
 
-    def forward(self, inputs):
+    def _fuse_features(self, inputs):
+        """Embed, resize, and fuse multi-scale encoder features.
+
+        Returns the fused feature map (B, channels, H, W) **before**
+        the classification head (cls_seg).  This is useful when
+        downstream modules (e.g. DynamicAnchorModule) need to operate
+        in the decoder's fused feature space.
+        """
         x = inputs
         n, _, h, w = x[-1].shape
-        # for f in x:
-        #     mmcv.print_log(f'{f.shape}', 'mmseg')
 
         os_size = x[0].size()[2:]
         _c = {}
         for i in self.in_index:
-            # mmcv.print_log(f'{i}: {x[i].shape}', 'mmseg')
             _c[i] = self.embed_layers[str(i)](x[i])
             if _c[i].dim() == 3:
                 _c[i] = _c[i].permute(0, 2, 1).contiguous()\
                     .reshape(n, -1, x[i].shape[2], x[i].shape[3])
-            # mmcv.print_log(f'_c{i}: {_c[i].shape}', 'mmseg')
             if _c[i].size()[2:] != os_size:
-                # mmcv.print_log(f'resize {i}', 'mmseg')
                 _c[i] = resize(
                     _c[i],
                     size=os_size,
                     mode='bilinear',
                     align_corners=self.align_corners)
 
-        x = self.fuse_layer(torch.cat(list(_c.values()), dim=1))
-        x = self.cls_seg(x)
+        fused = self.fuse_layer(torch.cat(list(_c.values()), dim=1))
+        return fused
 
+    def forward(self, inputs):
+        x = self._fuse_features(inputs)
+        x = self.cls_seg(x)
         return x

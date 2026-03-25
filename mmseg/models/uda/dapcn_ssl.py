@@ -31,6 +31,7 @@ from copy import deepcopy
 
 import numpy as np
 import torch
+import torch.nn as nn
 import torch.nn.functional as F
 from timm.models.layers import DropPath
 from torch.nn.modules.dropout import _DropoutNd
@@ -103,6 +104,16 @@ class DAPCN_SSL(UDADecorator):
             after this many iterations. Prototypes need time to learn
             meaningful representations before they can correct pseudo-
             labels. Default: 1000.
+        anchor_after_fusion (bool): Where to place DynamicAnchorModule.
+            False (Solution 1): DynAnchor operates in encoder space
+                (in_channels[-1], e.g. 512-d). A learned linear layer
+                projects prototypes to decoder space for conv_seg.
+            True (Solution 2): DynAnchor operates in the decoder's
+                fused feature space (channels, e.g. 256-d). Prototypes
+                are natively compatible with conv_seg — no projection
+                needed. This is semantically richer as the fused features
+                carry multi-scale contextual information.
+            Default: False.
         dynamic_anchor (dict, optional): Config for DynamicAnchorModule.
         dapg_loss (dict, optional): Config for DAPGLoss.
         affinity_loss (dict, optional): Config for AffinityBoundaryLoss.
@@ -124,6 +135,7 @@ class DAPCN_SSL(UDADecorator):
                  proto_correction=True,
                  proto_correction_alpha=0.5,
                  proto_correction_start_iter=1000,
+                 anchor_after_fusion=False,
                  # Sub-module configs
                  dynamic_anchor=None,
                  dapg_loss=None,
@@ -160,6 +172,7 @@ class DAPCN_SSL(UDADecorator):
         self.proto_correction = proto_correction
         self.proto_correction_alpha = proto_correction_alpha
         self.proto_correction_start_iter = proto_correction_start_iter
+        self.anchor_after_fusion = anchor_after_fusion
 
         # EMA teacher model
         ema_cfg = deepcopy(cfg['model'])
@@ -192,26 +205,54 @@ class DAPCN_SSL(UDADecorator):
         self.class_probs = {}
 
     def _init_dynamic_anchor(self):
-        """Build DynamicAnchorModule, auto-detecting feature_dim."""
-        decode_head_cfg = self.get_model().decode_head
-        in_channels = decode_head_cfg.in_channels
+        """Build DynamicAnchorModule, auto-detecting feature_dim.
+
+        Two placement strategies controlled by ``anchor_after_fusion``:
+
+        Solution 1 (anchor_after_fusion=False):
+            DynAnchor operates in encoder space (in_channels[-1], e.g. 512).
+            A learned Linear(512→256) projects prototypes to decoder space
+            for pseudo-label correction through conv_seg.
+
+        Solution 2 (anchor_after_fusion=True):
+            DynAnchor operates in the decoder's fused space (channels, e.g.
+            256). Prototypes are natively compatible with conv_seg — no
+            projection needed. Features are obtained via
+            DAFormerHead._fuse_features() instead of _transform_inputs().
+        """
+        decode_head = self.get_model().decode_head
+        in_channels = decode_head.in_channels
         if isinstance(in_channels, (list, tuple)):
             in_channels = in_channels[-1]
+        decoder_channels = decode_head.channels  # conv_seg input dim
+
+        # Determine feature_dim based on placement strategy
+        if self.anchor_after_fusion:
+            feature_dim = decoder_channels  # 256-d (fused decoder space)
+        else:
+            feature_dim = in_channels       # 512-d (encoder space)
 
         if self._dynamic_anchor_cfg is not None:
             da_cfg = deepcopy(self._dynamic_anchor_cfg)
-            da_cfg.setdefault('feature_dim', in_channels)
+            da_cfg.setdefault('feature_dim', feature_dim)
             self.dynamic_anchor = MODELS.build(da_cfg)
         else:
             from mmseg.models.uda.dynamic_anchor import DynamicAnchorModule
             self.dynamic_anchor = DynamicAnchorModule(
-                feature_dim=in_channels,
+                feature_dim=feature_dim,
                 max_groups=64,
                 temperature=0.1,
                 num_iters=3,
                 init_method='xavier',
                 min_quality=0.1,
             )
+
+        # Solution 1 only: projection from encoder to decoder space
+        # Solution 2: proto_to_decoder is None (no projection needed)
+        if not self.anchor_after_fusion and feature_dim != decoder_channels:
+            self.proto_to_decoder = nn.Linear(feature_dim, decoder_channels)
+        else:
+            self.proto_to_decoder = None
 
     def _init_dapg_loss(self):
         """Build DAPGLoss for prototype grouping."""
@@ -258,6 +299,30 @@ class DAPCN_SSL(UDADecorator):
             log_vars=log_vars, num_samples=len(data_batch['img_metas']))
         return outputs
 
+    def _get_anchor_features(self, encoder_features):
+        """Get the feature map for DynamicAnchorModule.
+
+        Args:
+            encoder_features: Multi-scale encoder features (list of tensors).
+
+        Returns:
+            Tensor: Feature map in the appropriate space.
+                Solution 1: encoder features[-1] (in_channels[-1]-d, e.g. 512)
+                Solution 2: fused decoder features (channels-d, e.g. 256)
+        """
+        if self.anchor_after_fusion:
+            # Solution 2: run features through decoder fusion
+            decode_head = self.get_model().decode_head
+            fused = decode_head._fuse_features(encoder_features)
+            return fused
+        else:
+            # Solution 1: use raw encoder features (last scale)
+            decode_head = self.get_model().decode_head
+            feat = decode_head._transform_inputs(encoder_features)
+            if isinstance(feat, list):
+                feat = feat[-1]
+            return feat
+
     def _get_pseudo_weight_scale(self):
         """Linear warmup scale for pseudo-label weight.
 
@@ -300,16 +365,14 @@ class DAPCN_SSL(UDADecorator):
             Tensor: Corrected softmax probabilities (B, num_classes, H, W).
         """
         # --- Step 1: Extract student features from unlabeled images ---
-        # Use the student model's encoder (no gradient needed for correction)
+        # Use the student model's encoder (no gradient needed for extraction)
         with torch.no_grad():
             student_feat = self.get_model().extract_feat(target_img)
 
-        # Get the final-scale decoder feature map
-        # DAFormerHead uses multiple_select, so student_feat is a list
+        # Get features in the appropriate space for DynAnchor
+        # Solution 1: encoder[-1] (512-d), Solution 2: fused (256-d)
+        feat = self._get_anchor_features(student_feat)
         decode_head = self.get_model().decode_head
-        feat = decode_head._transform_inputs(student_feat)
-        if isinstance(feat, list):
-            feat = feat[-1]
         B, C_feat, Hf, Wf = feat.shape
 
         # --- Step 2: Run DynamicAnchorModule to get prototypes and
@@ -321,9 +384,13 @@ class DAPCN_SSL(UDADecorator):
         N = B * Hf * Wf
 
         # --- Step 3: Project prototypes through the classifier f_theta ---
-        # conv_seg: (channels, num_classes, 1, 1) — 1x1 convolution
-        # Reshape prototypes to (K, C, 1, 1) for conv2d compatibility
-        proto_4d = proto.unsqueeze(-1).unsqueeze(-1)  # (K, C, 1, 1)
+        # Prototypes are in encoder space (in_channels, e.g. 512).
+        # conv_seg expects decoder space (channels, e.g. 256).
+        # Bridge with proto_to_decoder if dimensions differ.
+        proto_dec = proto  # (K, feature_dim)
+        if self.proto_to_decoder is not None:
+            proto_dec = self.proto_to_decoder(proto)  # (K, decoder_channels)
+        proto_4d = proto_dec.unsqueeze(-1).unsqueeze(-1)  # (K, C_dec, 1, 1)
         proto_logits = decode_head.conv_seg(proto_4d)  # (K, num_classes, 1, 1)
         proto_probs = torch.softmax(
             proto_logits.squeeze(-1).squeeze(-1), dim=1)  # (K, num_classes)
@@ -396,12 +463,12 @@ class DAPCN_SSL(UDADecorator):
         # --- Prototype grouping loss ---
         if self.proto_lambda > 0:
             if is_labeled or self.apply_proto_on_target:
-                feat = (decoder_features[-1] if isinstance(
-                    decoder_features, list) else decoder_features)
-                B, C, Hf, Wf = feat.shape
-                feats_flat = feat.permute(0, 2, 3, 1).reshape(-1, C)
+                # Get features in the DynAnchor's native space
+                anchor_feat = self._get_anchor_features(decoder_features)
+                B, C, Hf, Wf = anchor_feat.shape
+                feats_flat = anchor_feat.permute(0, 2, 3, 1).reshape(-1, C)
 
-                assign, proto, quality = self.dynamic_anchor(feat)
+                assign, proto, quality = self.dynamic_anchor(anchor_feat)
                 loss_proto, loss_dict = self.dapg_loss_fn(
                     feats_flat, assign, proto, quality)
 

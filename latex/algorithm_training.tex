@@ -1,0 +1,49 @@
+% Requires: \usepackage[ruled,lined,linesnumbered]{algorithm2e}
+
+\begin{algorithm}[t]
+\caption{DAPCN Semi-Supervised Training}
+\label{alg:dapcn_ssl}
+
+\DontPrintSemicolon
+\SetKwInput{KwInput}{Input}
+\SetKwInput{KwOutput}{Output}
+
+\KwInput{Labeled set $\mathcal{D}_l{=}\{(\mathbf{x}_l, \mathbf{y}_l)\}$, unlabeled set $\mathcal{D}_u{=}\{\mathbf{x}_u\}$, EMA momentum $\alpha$, threshold $\tau$, correction weight $\alpha_c$, correction start $T_s$, warmup $T_w$}
+\KwOutput{Trained student $\theta_S$}
+
+\BlankLine
+$\theta_T \leftarrow \theta_S$; \; initialise prototypes $\{\mathbf{P}_i\}_{i=1}^{K}$\;
+
+\For{$t = 1$ \KwTo $T$}{
+    Sample $(\mathbf{x}_l, \mathbf{y}_l) \sim \mathcal{D}_l$, \; $\mathbf{x}_u \sim \mathcal{D}_u$\;
+    $\theta_T \leftarrow \alpha \, \theta_T + (1 - \alpha) \, \theta_S$ \tcp*{EMA update}
+
+    \BlankLine
+    \tcc{Supervised forward on labeled images}
+    $\mathbf{F}_l, \hat{\mathbf{y}}_l \leftarrow g(\mathbf{x}_l;\, \theta_S)$; \quad $\mathcal{L}_{\text{CE}}^{l} \leftarrow \text{CE}(\hat{\mathbf{y}}_l, \mathbf{y}_l)$\;
+    $\mathcal{L}_{\text{DAPCN}}^{l} \leftarrow \lambda_b \, \mathcal{L}_{\text{aff}}(\mathbf{F}_l, \mathbf{y}_l) + \lambda_p \, \mathcal{L}_{\text{DAPG}}(\mathbf{F}_l)$\;
+
+    \BlankLine
+    \tcc{Pseudo-label generation with prototype correction}
+    $\mathbf{p}^{\text{tea}} \leftarrow \text{softmax}\bigl(f(\mathbf{x}_u;\, \theta_T)\bigr)$\;
+    \eIf{$t \geq T_s$}{
+        $\mathbf{A}, \_ \leftarrow \text{DynAnchor}(\mathbf{F}_u)$; \quad $\mathbf{q}_i \leftarrow \text{softmax}\bigl(f_\theta(\mathbf{P}_i)\bigr)$\;
+        $\hat{p}_j^{c} \leftarrow \textstyle\sum_{i=1}^{K} a_{ij} \, \mathbf{q}_i^{c}$; \quad $\tilde{\mathbf{p}} \leftarrow (1{-}\alpha_c)\, \mathbf{p}^{\text{tea}} + \alpha_c \, \hat{\mathbf{p}}$\;
+    }{
+        $\tilde{\mathbf{p}} \leftarrow \mathbf{p}^{\text{tea}}$\;
+    }
+    $\hat{y}_j \leftarrow \arg\max_c \, \tilde{p}_j^{c}$; \quad $\mathbf{w} \leftarrow \tfrac{1}{|\Omega|}\!\sum_j \mathbb{1}[\max_c \tilde{p}_j^c {\geq} \tau] \cdot \min(1, t/T_w)$\;
+
+    \BlankLine
+    \tcc{ClassMix and mixed supervision}
+    $\mathbf{M} \leftarrow \text{ClassMix}(\mathbf{y}_l)$\;
+    $\mathbf{x}_m \leftarrow \text{Aug}\bigl(\mathbf{M} {\odot}\, \mathbf{x}_l + (1{-}\mathbf{M}) {\odot}\, \mathbf{x}_u\bigr)$; \quad $\mathbf{y}_m \leftarrow \mathbf{M} {\odot}\, \mathbf{y}_l + (1{-}\mathbf{M}) {\odot}\, \hat{\mathbf{y}}_u$\;
+    $\mathbf{w}_m \leftarrow \mathbf{M} {\odot}\, \mathbf{1} + (1{-}\mathbf{M}) {\odot}\, \mathbf{w}$\;
+    $\mathbf{F}_m, \hat{\mathbf{y}}_m \leftarrow g(\mathbf{x}_m;\, \theta_S)$; \quad $\mathcal{L}_{\text{CE}}^{m} \leftarrow \text{CE}(\hat{\mathbf{y}}_m, \mathbf{y}_m, \mathbf{w}_m)$\;
+    $\mathcal{L}_{\text{DAPCN}}^{m} \leftarrow \lambda_b \, \mathcal{L}_{\text{aff}}(\mathbf{F}_m, \mathbf{y}_m, \mathbf{w}_m) + \lambda_p \, \mathcal{L}_{\text{DAPG}}(\mathbf{F}_m, \mathbf{w}_m)$\;
+
+    \BlankLine
+    $\mathcal{L} \leftarrow \mathcal{L}_{\text{CE}}^{l} + \mathcal{L}_{\text{DAPCN}}^{l} + \mathcal{L}_{\text{CE}}^{m} + \mathcal{L}_{\text{DAPCN}}^{m}$\;
+    $\theta_S \leftarrow \theta_S - \eta \, \text{AdamW}(\nabla_{\theta_S} \mathcal{L})$\;
+}
+\end{algorithm}

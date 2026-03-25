@@ -284,4 +284,263 @@ python tools/train.py configs/daformer/satellite_uda_dapcn_daformer_mitb5.py
 
 ---
 
-*Generated from technical discussion on DAFormer-DAPCN semi-supervised satellite segmentation framework.*
+---
+
+## 8. Prototype-Based Pseudo-Label Correction
+
+### 8.1 Motivation
+
+The EMA teacher generates pseudo-labels based solely on its current predictive confidence. However, in semi-supervised settings with limited labeled data, the teacher's early predictions exhibit systematic biases — particularly for rare classes and boundary regions. The DynamicAnchorModule learns K class-agnostic prototypes that capture the dataset's feature distribution through differentiable EM refinement, independent of class labels. These prototypes provide a complementary signal that can regularise and correct the teacher's predictions.
+
+### 8.2 Mathematical Formulation
+
+The corrected probability for each pixel j is computed as:
+
+```
+p^c_j = sum_{i=1}^{K} f_theta(PT_i) * a_ij
+```
+
+where:
+
+- `PT_i` is the i-th prototype learned by the DynamicAnchorModule (a vector in the decoder's feature space, dimension C)
+- `f_theta(.)` is the decoder's `conv_seg` classifier — a 1×1 convolution mapping feature_dim → num_classes, followed by softmax — which projects a prototype into class probability space
+- `a_ij` is the soft assignment (adjacency) between pixel j and prototype i, computed via temperature-scaled cosine similarity in the DynamicAnchorModule's E-step
+
+The final blended probability combines teacher prediction with prototype correction:
+
+```
+p_final = (1 - alpha) * p_teacher + alpha * p^c
+```
+
+where `alpha` (default 0.5) controls the correction strength.
+
+### 8.3 Why `conv_seg` Is the Correct Bridge
+
+The `conv_seg` layer in `BaseDecodeHead` is a 1×1 convolution with weight shape `(num_classes, channels, 1, 1)`. Since the DynamicAnchorModule's prototypes live in the same C-dimensional feature space as the decoder's output features (both have `feature_dim = channels`), applying `conv_seg` to a prototype is mathematically equivalent to computing a linear classifier's prediction for that prototype. The softmax over the resulting logits yields a valid class probability distribution.
+
+### 8.4 Implementation Details
+
+The correction is implemented in `_correct_pseudo_labels()` with five internal steps:
+
+```python
+def _correct_pseudo_labels(self, target_img, target_img_metas, ema_softmax):
+    # Step 1: Extract student features (no gradient needed)
+    with torch.no_grad():
+        student_feat = self.get_model().extract_feat(target_img)
+    decode_head = self.get_model().decode_head
+    feat = decode_head._transform_inputs(student_feat)
+    if isinstance(feat, list):
+        feat = feat[-1]
+    B, C_feat, Hf, Wf = feat.shape
+
+    # Step 2: DynamicAnchorModule → prototypes + soft assignments
+    assign, proto, quality = self.dynamic_anchor(feat)
+
+    # Step 3: Project prototypes through classifier f_theta
+    proto_4d = proto.unsqueeze(-1).unsqueeze(-1)   # (K, C, 1, 1)
+    proto_logits = decode_head.conv_seg(proto_4d)   # (K, num_classes, 1, 1)
+    proto_probs = torch.softmax(
+        proto_logits.squeeze(-1).squeeze(-1), dim=1)  # (K, num_classes)
+
+    # Step 4: Corrected probability via matrix multiplication
+    corrected_probs = torch.mm(assign, proto_probs)   # (N, num_classes)
+    corrected_probs = corrected_probs.reshape(
+        B, Hf, Wf, num_classes).permute(0, 3, 1, 2)
+
+    # Upsample to match teacher resolution if needed
+    _, _, H_tea, W_tea = ema_softmax.shape
+    if (Hf, Wf) != (H_tea, W_tea):
+        corrected_probs = F.interpolate(
+            corrected_probs, size=(H_tea, W_tea),
+            mode='bilinear', align_corners=False)
+
+    # Step 5: Blend teacher + prototype correction
+    alpha = self.proto_correction_alpha
+    blended = (1 - alpha) * ema_softmax + alpha * corrected_probs
+    return blended
+```
+
+### 8.5 Delayed Activation
+
+Prototype correction is activated only after `proto_correction_start_iter` (default: 1000) iterations. During the initial phase, prototypes are still being shaped by the DAPGLoss via labeled supervision — enabling correction too early would inject noise from uninformed prototypes into the pseudo-labels, destabilising training.
+
+The activation condition in `forward_train` (Step 3b):
+
+```python
+use_correction = (
+    self.proto_correction
+    and self.dynamic_anchor is not None
+    and self.local_iter >= self.proto_correction_start_iter
+)
+if use_correction:
+    ema_softmax = self._correct_pseudo_labels(
+        target_img, target_img_metas, ema_softmax)
+```
+
+### 8.6 Downstream Impact
+
+Because the correction modifies `ema_softmax` before `torch.max()` is applied, it simultaneously affects three downstream quantities:
+
+1. **Hard pseudo-label** (`pseudo_label`): the argmax class assignment may change for pixels where prototype correction shifts the dominant class.
+2. **Confidence weight** (`pseudo_weight`): the max probability changes, affecting which pixels exceed the confidence threshold τ=0.968.
+3. **Mixed label/weight after ClassMix**: since ClassMix operates on the derived pseudo-labels and weights, the correction propagates through the entire mixed supervision pathway.
+
+---
+
+## 9. Supervised vs. Mixed Supervision Weights
+
+### 9.1 Labeled Supervision (Step 1)
+
+Labeled images use uniform weight 1.0 for all valid pixels. The `forward_train` call at Step 5 passes `seg_weight=None` to the decode head's `losses()` method, which treats all non-ignore pixels equally:
+
+```python
+clean_losses = self.get_model().forward_train(
+    img, img_metas, gt_semantic_seg, return_feat=True)
+```
+
+### 9.2 Mixed Supervision (Step 5)
+
+Mixed images use confidence-scaled, warmup-modulated, spatially-mixed weights. The pseudo-weight undergoes three transformations:
+
+1. **Confidence ratio**: fraction of pixels exceeding threshold τ=0.968, broadcast to a uniform spatial map.
+2. **Warmup scaling**: multiplied by `_get_pseudo_weight_scale()`, linearly ramping from 0 to 1 over the first N iterations.
+3. **ClassMix spatial mixing**: `strong_transform()` applies the binary class mask, setting weight to 1.0 in labeled-patch regions and to the pseudo-weight in unlabeled-background regions.
+
+```python
+# Step 5 passes pseudo_weight as seg_weight:
+model_output = self.get_model().forward_train(
+    mixed_img, img_metas, mixed_lbl, pseudo_weight, return_feat=True)
+```
+
+This means labeled pixels within the mixed image receive weight 1.0 (from `gt_pixel_weight`), while unlabeled pixels receive the confidence-scaled pseudo-weight. The two populations are blended spatially by the ClassMix mask.
+
+---
+
+## 10. The `torch.max` vs. `torch.argmax` Distinction
+
+In the pseudo-label derivation (line 546 of `dapcn_ssl.py`):
+
+```python
+pseudo_prob, pseudo_label = torch.max(ema_softmax, dim=1)
+```
+
+`torch.max(tensor, dim)` returns a named tuple `(values, indices)`, providing both the maximum probability value and its index (the predicted class) in a single operation. This is more efficient than calling `torch.argmax` separately, because:
+
+- `pseudo_label` (indices) is used as the hard pseudo-label target for cross-entropy.
+- `pseudo_prob` (values) is used to compute the confidence weight — pixels whose max probability exceeds τ=0.968 are considered reliable.
+
+Both quantities are needed simultaneously, making `torch.max` the natural choice over `torch.argmax` (which returns only the indices and would require a separate `torch.gather` or indexing operation to retrieve the corresponding probabilities).
+
+---
+
+## 11. The `train_step` Method
+
+### 11.1 Role in the Training Loop
+
+The `train_step` method is the entry point that MMSeg's `IterBasedRunner` calls at every training iteration:
+
+```python
+def train_step(self, data_batch, optimizer, **kwargs):
+    optimizer.zero_grad()
+    log_vars = self(**data_batch)
+    optimizer.step()
+
+    log_vars.pop('loss', None)
+    outputs = dict(
+        log_vars=log_vars, num_samples=len(data_batch['img_metas']))
+    return outputs
+```
+
+### 11.2 Line-by-Line Analysis
+
+**`optimizer.zero_grad()`** — Clears all accumulated gradients from the previous iteration. Essential because PyTorch accumulates gradients by default.
+
+**`log_vars = self(**data_batch)`** — The `self(...)` call triggers Python's `__call__` mechanism, routing through `nn.Module.forward()` to `forward_train()`. The `data_batch` dict is unpacked as keyword arguments — its keys (`img`, `img_metas`, `gt_semantic_seg`, `target_img`, `target_img_metas`) map exactly to the `forward_train` signature.
+
+Inside `forward_train`, six backward passes accumulate gradients onto the same parameter set:
+
+| Backward call | Source | retain_graph? | Reason |
+|---------------|--------|---------------|--------|
+| `clean_loss.backward(retain_graph=True)` | Step 1: supervised CE | Yes | Step 2 reuses `src_feat` |
+| `src_dapcn_loss.backward()` | Step 2: labeled DAPCN | No | Last use of `src_feat` graph |
+| *(no backward)* | Step 3: teacher inference | — | `torch.no_grad()` context |
+| *(no backward)* | Step 4: ClassMix augmentation | — | Pure tensor manipulation |
+| `target_loss.backward(retain_graph=True)` | Step 5: mixed CE | Yes | Step 6 reuses `tgt_feat` |
+| `tgt_dapcn_loss.backward()` | Step 6: mixed DAPCN | No | Last use of `tgt_feat` graph |
+
+**`optimizer.step()`** — Applies the accumulated gradient in a single AdamW update. The total gradient is:
+
+```
+∇θ = ∇L_CE^labeled + ∇L_DAPCN^labeled + ∇L_CE^mixed + ∇L_DAPCN^mixed
+```
+
+Note: the EMA teacher is not updated here — it was already updated at the start of `forward_train` via `_update_ema()`.
+
+**`log_vars.pop('loss', None)`** — Removes the aggregated scalar loss key (inserted by `_parse_losses`) because the runner only needs individual loss components for TensorBoard/console logging.
+
+**Return value** — The `outputs` dict contains `log_vars` (scalar loss values for logging) and `num_samples` (batch size for averaging by the runner).
+
+### 11.3 Why `retain_graph=True` on Steps 1 and 5
+
+Steps 1 and 5 both extract decoder features (`src_feat`, `tgt_feat`) that are reused in Steps 2 and 6 respectively. Without `retain_graph=True`, PyTorch would free the intermediate computation graph after the first `.backward()`, making the subsequent DAPCN loss backward pass impossible since it depends on the same feature tensors. The last backward in each pair does not need `retain_graph` because no further backward passes will use that graph.
+
+### 11.4 Calling Context
+
+The `IterBasedRunner` calls `train_step` in a loop:
+
+```python
+# Simplified IterBasedRunner.run()
+for i, data_batch in enumerate(data_loader):
+    outputs = model.train_step(data_batch, optimizer)
+    # Log outputs, save checkpoints, run hooks...
+```
+
+The `data_batch` comes from `SSLDataset.__getitem__`, which pairs one labeled sample with one unlabeled sample and returns the five-key dict that `forward_train` expects.
+
+---
+
+## 12. Ablation Configs for Prototype Correction
+
+Three additional ablation configs were created to evaluate the prototype-based pseudo-label correction:
+
+| Config | Setting | Research Question |
+|--------|---------|-------------------|
+| A7_no_proto_correction | `proto_correction=False` | Does prototype correction improve pseudo-label quality? |
+| B5_correction_alpha_02 | `proto_correction_alpha=0.2` | Is a lighter correction blending more stable? |
+| B5_correction_alpha_08 | `proto_correction_alpha=0.8` | Does stronger prototype influence help or harm? |
+
+These bring the total ablation count to 25 experiments (7 component + 14 hyperparameter + 3 boundary mode + 1 baseline).
+
+### 12.1 Updated Configuration Parameters
+
+The following parameters were added to both the base config (`configs/_base_/ssl/dapcn_ssl.py`) and the main training config:
+
+```python
+proto_correction=True,          # Enable prototype-based correction
+proto_correction_alpha=0.5,     # Blending weight (0=pure teacher, 1=pure prototype)
+proto_correction_start_iter=1000,  # Delay activation until prototypes stabilise
+```
+
+---
+
+## 13. Updated Project File Structure
+
+### 13.1 New Files (This Session)
+
+| File | Description |
+|------|-------------|
+| `configs/daformer/ablation_ssl/A7_no_proto_correction.py` | Component ablation: disable correction |
+| `configs/daformer/ablation_ssl/B5_correction_alpha_02.py` | Hyperparameter: α=0.2 |
+| `configs/daformer/ablation_ssl/B5_correction_alpha_08.py` | Hyperparameter: α=0.8 |
+
+### 13.2 Modified Files (This Session)
+
+| File | Changes |
+|------|---------|
+| `mmseg/models/uda/dapcn_ssl.py` | Added `_correct_pseudo_labels()`, integration in `forward_train` Step 3b, new `__init__` parameters |
+| `configs/_base_/ssl/dapcn_ssl.py` | Added `proto_correction`, `proto_correction_alpha`, `proto_correction_start_iter` |
+| `configs/daformer/satellite_ssl_dapcn_daformer_mitb5.py` | Added proto_correction parameters |
+
+---
+
+*Generated from technical discussion on DAFormer-DAPCN semi-supervised satellite segmentation framework. Updated with prototype-based pseudo-label correction, train_step analysis, and supervision weight clarifications.*

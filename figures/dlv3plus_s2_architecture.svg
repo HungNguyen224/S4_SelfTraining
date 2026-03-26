@@ -1,0 +1,325 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1100 780" font-family="Arial, Helvetica, sans-serif">
+  <defs>
+    <marker id="arr" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0,10 3.5,0 7" fill="#333"/>
+    </marker>
+    <marker id="arr-b" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0,10 3.5,0 7" fill="#2563EB"/>
+    </marker>
+    <marker id="arr-r" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0,10 3.5,0 7" fill="#DC2626"/>
+    </marker>
+    <marker id="arr-p" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0,10 3.5,0 7" fill="#7C3AED"/>
+    </marker>
+    <marker id="arr-g" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0,10 3.5,0 7" fill="#059669"/>
+    </marker>
+    <marker id="arr-o" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0,10 3.5,0 7" fill="#D97706"/>
+    </marker>
+    <marker id="arr-gray" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0,10 3.5,0 7" fill="#9CA3AF"/>
+    </marker>
+    <marker id="arr-rose" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0,10 3.5,0 7" fill="#E11D48"/>
+    </marker>
+    <linearGradient id="g-enc" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#DBEAFE"/>
+      <stop offset="100%" style="stop-color:#BFDBFE"/>
+    </linearGradient>
+    <linearGradient id="g-dec" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#E0E7FF"/>
+      <stop offset="100%" style="stop-color:#C7D2FE"/>
+    </linearGradient>
+    <linearGradient id="g-proto" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#F3E8FF"/>
+      <stop offset="100%" style="stop-color:#E9D5FF"/>
+    </linearGradient>
+    <linearGradient id="g-ema" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#FEE2E2"/>
+      <stop offset="100%" style="stop-color:#FECACA"/>
+    </linearGradient>
+    <linearGradient id="g-loss" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#FEF3C7"/>
+      <stop offset="100%" style="stop-color:#FDE68A"/>
+    </linearGradient>
+    <linearGradient id="g-couple" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#FFF1F2"/>
+      <stop offset="100%" style="stop-color:#FFE4E6"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1100" height="780" rx="12" fill="#FAFAFA" stroke="#E5E7EB"/>
+
+  <!-- Title -->
+  <text x="550" y="35" text-anchor="middle" font-size="18" font-weight="bold" fill="#111827">Solution 2: DynAnchor After Decoder Fusion — DeepLabV3+ + ResNet-101</text>
+  <text x="550" y="55" text-anchor="middle" font-size="12" fill="#6B7280">anchor_after_fusion = True  |  No projection layer needed (prototypes natively 512-d)</text>
+
+  <!-- ============================================================ -->
+  <!-- ENCODER: ResNet-101 -->
+  <!-- ============================================================ -->
+  <rect x="30" y="80" width="200" height="290" rx="8" fill="url(#g-enc)" stroke="#3B82F6" stroke-width="1.5"/>
+  <text x="130" y="102" text-anchor="middle" font-size="13" font-weight="bold" fill="#1E40AF">ResNet-101 (d8)</text>
+
+  <rect x="50" y="115" width="160" height="32" rx="5" fill="#fff" stroke="#93C5FD"/>
+  <text x="130" y="136" text-anchor="middle" font-size="11" fill="#1E3A8A">Stage 0: 256-d  (1/4)</text>
+
+  <rect x="50" y="155" width="160" height="32" rx="5" fill="#fff" stroke="#93C5FD"/>
+  <text x="130" y="176" text-anchor="middle" font-size="11" fill="#1E3A8A">Stage 1: 512-d  (1/8)</text>
+
+  <rect x="50" y="195" width="160" height="32" rx="5" fill="#fff" stroke="#93C5FD"/>
+  <text x="130" y="216" text-anchor="middle" font-size="11" fill="#1E3A8A">Stage 2: 1024-d (1/8)</text>
+
+  <rect x="50" y="235" width="160" height="32" rx="5" fill="#fff" stroke="#93C5FD"/>
+  <text x="130" y="256" text-anchor="middle" font-size="11" fill="#1E3A8A">Stage 3: 2048-d (1/8)</text>
+
+  <text x="130" y="290" text-anchor="middle" font-size="10" fill="#6B7280">dilations = (1, 1, 2, 4)</text>
+  <text x="130" y="305" text-anchor="middle" font-size="10" fill="#6B7280">strides = (1, 2, 1, 1)</text>
+  <text x="130" y="330" text-anchor="middle" font-size="9" fill="#9CA3AF">pretrained: resnet101_v1c</text>
+  <text x="130" y="360" text-anchor="middle" font-size="10" fill="#3B82F6" font-style="italic">out_indices = (0, 1, 2, 3)</text>
+
+  <!-- ============================================================ -->
+  <!-- DECODER: DeepLabV3+ with _fuse_features highlighted -->
+  <!-- ============================================================ -->
+  <rect x="280" y="80" width="270" height="330" rx="8" fill="url(#g-dec)" stroke="#6366F1" stroke-width="1.5"/>
+  <text x="415" y="102" text-anchor="middle" font-size="13" font-weight="bold" fill="#3730A3">DeepLabV3+ Decoder</text>
+
+  <!-- ASPP block -->
+  <rect x="300" y="115" width="230" height="55" rx="5" fill="#fff" stroke="#A5B4FC"/>
+  <text x="415" y="133" text-anchor="middle" font-size="11" font-weight="bold" fill="#4338CA">ASPP (rates 1,12,24,36)</text>
+  <text x="415" y="148" text-anchor="middle" font-size="10" fill="#6366F1">2048 → 5×512 → cat 2560</text>
+  <text x="415" y="162" text-anchor="middle" font-size="10" fill="#6366F1">→ bottleneck → 512-d</text>
+
+  <!-- c1 branch -->
+  <rect x="300" y="180" width="230" height="35" rx="5" fill="#fff" stroke="#A5B4FC"/>
+  <text x="415" y="202" text-anchor="middle" font-size="11" fill="#4338CA">c1: 256 → 48-d (low-level)</text>
+
+  <!-- sep_bottleneck — highlighted as _fuse_features output -->
+  <rect x="300" y="225" width="230" height="40" rx="5" fill="#EDE9FE" stroke="#7C3AED" stroke-width="2"/>
+  <text x="415" y="245" text-anchor="middle" font-size="11" font-weight="bold" fill="#4338CA">sep_bottleneck: 560 → 512-d</text>
+  <text x="415" y="258" text-anchor="middle" font-size="9" fill="#7C3AED">← _fuse_features() output →</text>
+
+  <!-- conv_seg -->
+  <rect x="325" y="285" width="180" height="35" rx="5" fill="#EEF2FF" stroke="#6366F1" stroke-width="1.5"/>
+  <text x="415" y="307" text-anchor="middle" font-size="11" font-weight="bold" fill="#3730A3">conv_seg: 512 → N_c</text>
+
+  <text x="415" y="348" text-anchor="middle" font-size="10" fill="#6366F1">channels = 512</text>
+  <text x="415" y="365" text-anchor="middle" font-size="9" fill="#9CA3AF">DepthwiseSeparableASPPHead</text>
+  <text x="415" y="400" text-anchor="middle" font-size="9" fill="#9CA3AF">_fuse_features() exposes 512-d</text>
+
+  <!-- Arrow: encoder stage 3 → ASPP -->
+  <line x1="230" y1="251" x2="295" y2="142" stroke="#333" stroke-width="1.5" marker-end="url(#arr)"/>
+  <text x="258" y="182" font-size="9" fill="#6B7280" transform="rotate(-30,258,182)">2048-d</text>
+
+  <!-- Arrow: encoder stage 0 → c1 -->
+  <line x1="230" y1="131" x2="295" y2="197" stroke="#333" stroke-width="1.5" marker-end="url(#arr)"/>
+  <text x="258" y="175" font-size="9" fill="#6B7280">256-d</text>
+
+  <!-- Arrow: ASPP → sep_bottleneck -->
+  <line x1="415" y1="170" x2="415" y2="222" stroke="#333" stroke-width="1" marker-end="url(#arr)"/>
+
+  <!-- Arrow: sep_bottleneck → conv_seg -->
+  <line x1="415" y1="265" x2="415" y2="282" stroke="#333" stroke-width="1" marker-end="url(#arr)"/>
+
+  <!-- ============================================================ -->
+  <!-- DynAnchor Module (Decoder Fused Space — 512-d) -->
+  <!-- ============================================================ -->
+  <rect x="30" y="420" width="270" height="155" rx="8" fill="url(#g-proto)" stroke="#7C3AED" stroke-width="1.5"/>
+  <text x="165" y="442" text-anchor="middle" font-size="13" font-weight="bold" fill="#5B21B6">DynamicAnchorModule</text>
+  <text x="165" y="458" text-anchor="middle" font-size="10" fill="#7C3AED">operates in decoder fused space (512-d)</text>
+
+  <rect x="50" y="470" width="230" height="28" rx="4" fill="#fff" stroke="#C4B5FD"/>
+  <text x="165" y="489" text-anchor="middle" font-size="10" fill="#5B21B6">Prototypes P ∈ ℝ^{K×512}  (nn.Parameter)</text>
+
+  <rect x="50" y="505" width="230" height="28" rx="4" fill="#fff" stroke="#C4B5FD"/>
+  <text x="165" y="524" text-anchor="middle" font-size="10" fill="#5B21B6">EM Refinement (T=3 iters, τ=0.1)</text>
+
+  <rect x="50" y="540" width="230" height="28" rx="4" fill="#fff" stroke="#C4B5FD"/>
+  <text x="165" y="559" text-anchor="middle" font-size="10" fill="#5B21B6">Quality Gate → K' active prototypes</text>
+
+  <!-- Arrow: _fuse_features → DynAnchor (512-d fused features) -->
+  <path d="M300,252 L165,252 L165,415" fill="none" stroke="#7C3AED" stroke-width="2" marker-end="url(#arr-p)"/>
+  <text x="100" y="340" font-size="10" fill="#7C3AED" font-weight="bold">512-d fused</text>
+  <text x="100" y="355" font-size="9" fill="#7C3AED">(after sep_bottleneck)</text>
+
+  <!-- ============================================================ -->
+  <!-- NO Projection — direct conv_seg compatibility -->
+  <!-- ============================================================ -->
+  <rect x="340" y="445" width="210" height="50" rx="8" fill="#F0FDF4" stroke="#059669" stroke-width="1.5" stroke-dasharray="5,3"/>
+  <text x="445" y="465" text-anchor="middle" font-size="11" font-weight="bold" fill="#065F46">No projection needed</text>
+  <text x="445" y="480" text-anchor="middle" font-size="10" fill="#059669">P ∈ ℝ^{K×512} → conv_seg(512,N_c)</text>
+  <text x="445" y="492" text-anchor="middle" font-size="9" fill="#9CA3AF">directly compatible — same 512-d space</text>
+
+  <!-- Arrow: DynAnchor → no projection box -->
+  <line x1="300" y1="470" x2="335" y2="470" stroke="#7C3AED" stroke-width="1.5" marker-end="url(#arr-p)"/>
+  <text x="312" y="463" font-size="9" fill="#7C3AED">K×512</text>
+
+  <!-- Arrow: no-projection → conv_seg -->
+  <path d="M445,445 L445,430 L415,430 L415,320" fill="none" stroke="#7C3AED" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arr-p)"/>
+  <text x="455" y="425" font-size="9" fill="#7C3AED">K×512 → conv_seg</text>
+
+  <!-- ============================================================ -->
+  <!-- Gradient Coupling Warning -->
+  <!-- ============================================================ -->
+  <rect x="30" y="590" width="270" height="80" rx="8" fill="url(#g-couple)" stroke="#E11D48" stroke-width="1.5"/>
+  <text x="165" y="612" text-anchor="middle" font-size="11" font-weight="bold" fill="#9F1239">⚠ Gradient Coupling</text>
+  <text x="165" y="630" text-anchor="middle" font-size="9" fill="#BE123C">DAPG gradients flow through _fuse_features()</text>
+  <text x="165" y="645" text-anchor="middle" font-size="9" fill="#BE123C">ASPP + c1_bottleneck + sep_bottleneck</text>
+  <text x="165" y="660" text-anchor="middle" font-size="9" fill="#E11D48" font-weight="bold">Compensated: λ_proto = 0.05 (halved from 0.1)</text>
+
+  <!-- Gradient coupling arrow from DynAnchor back to decoder -->
+  <path d="M165,590 L165,580 L280,580 L280,250 L298,250" fill="none" stroke="#E11D48" stroke-width="1.5" stroke-dasharray="4,2" marker-end="url(#arr-rose)"/>
+  <text x="288" y="410" font-size="9" fill="#E11D48" transform="rotate(-90,288,410)">∂L_DAPG / ∂θ_decoder</text>
+
+  <!-- ============================================================ -->
+  <!-- EMA Teacher -->
+  <!-- ============================================================ -->
+  <rect x="600" y="80" width="220" height="100" rx="8" fill="url(#g-ema)" stroke="#DC2626" stroke-width="1.5"/>
+  <text x="710" y="102" text-anchor="middle" font-size="13" font-weight="bold" fill="#991B1B">EMA Teacher</text>
+  <text x="710" y="120" text-anchor="middle" font-size="10" fill="#DC2626">ResNet-101 + DeepLabV3+ (frozen)</text>
+  <text x="710" y="138" text-anchor="middle" font-size="10" fill="#DC2626">α = 0.999 momentum</text>
+  <text x="710" y="158" text-anchor="middle" font-size="10" fill="#B91C1C">→ pseudo-label softmax p^tea</text>
+  <text x="710" y="172" text-anchor="middle" font-size="9" fill="#9CA3AF">no gradients (detached)</text>
+
+  <!-- Arrow: student → EMA (dashed) -->
+  <path d="M550,200 L620,200 L620,180" fill="none" stroke="#9CA3AF" stroke-width="1" stroke-dasharray="5,3" marker-end="url(#arr-gray)"/>
+  <text x="578" y="193" font-size="9" fill="#9CA3AF">EMA update</text>
+
+  <!-- ============================================================ -->
+  <!-- Proto Correction Block -->
+  <!-- ============================================================ -->
+  <rect x="600" y="210" width="220" height="120" rx="8" fill="url(#g-proto)" stroke="#7C3AED" stroke-width="1.5"/>
+  <text x="710" y="232" text-anchor="middle" font-size="12" font-weight="bold" fill="#5B21B6">Pseudo-Label Correction</text>
+  <text x="710" y="252" text-anchor="middle" font-size="10" fill="#7C3AED">p̂_j = Σ a_ij · q_i</text>
+  <text x="710" y="270" text-anchor="middle" font-size="10" fill="#7C3AED">q_i = softmax(conv_seg(P_i))</text>
+  <text x="710" y="292" text-anchor="middle" font-size="11" fill="#5B21B6">p̃ = (1−α)p^tea + α·p̂</text>
+  <text x="710" y="310" text-anchor="middle" font-size="9" fill="#9CA3AF">active after iter 1000</text>
+  <text x="710" y="322" text-anchor="middle" font-size="9" fill="#9CA3AF">α = proto_correction_alpha = 0.5</text>
+
+  <!-- Arrow: EMA → correction -->
+  <line x1="710" y1="180" x2="710" y2="207" stroke="#DC2626" stroke-width="1.5" marker-end="url(#arr-r)"/>
+  <text x="720" y="198" font-size="9" fill="#DC2626">p^tea</text>
+
+  <!-- Arrow: DynAnchor → correction (prototypes + assignments) -->
+  <path d="M300,500 L560,500 L560,270 L597,270" fill="none" stroke="#7C3AED" stroke-width="1.5" marker-end="url(#arr-p)"/>
+  <text x="430" y="510" font-size="9" fill="#7C3AED">prototypes (512-d) + assignments</text>
+
+  <!-- Note: no W· projection in q_i formula -->
+  <text x="710" y="282" text-anchor="middle" font-size="8" fill="#A855F7">(no projection — P_i already 512-d)</text>
+
+  <!-- ============================================================ -->
+  <!-- ClassMix -->
+  <!-- ============================================================ -->
+  <rect x="600" y="360" width="220" height="50" rx="8" fill="#ECFDF5" stroke="#059669" stroke-width="1.5"/>
+  <text x="710" y="382" text-anchor="middle" font-size="12" font-weight="bold" fill="#065F46">ClassMix Augmentation</text>
+  <text x="710" y="400" text-anchor="middle" font-size="10" fill="#059669">labeled patches → unlabeled</text>
+
+  <!-- Arrow: correction → ClassMix -->
+  <line x1="710" y1="330" x2="710" y2="357" stroke="#333" stroke-width="1" marker-end="url(#arr)"/>
+
+  <!-- ============================================================ -->
+  <!-- LOSSES -->
+  <!-- ============================================================ -->
+  <rect x="860" y="80" width="210" height="340" rx="8" fill="url(#g-loss)" stroke="#D97706" stroke-width="1.5"/>
+  <text x="965" y="102" text-anchor="middle" font-size="13" font-weight="bold" fill="#92400E">Training Losses</text>
+
+  <rect x="878" y="115" width="175" height="35" rx="5" fill="#fff" stroke="#FCD34D"/>
+  <text x="965" y="137" text-anchor="middle" font-size="11" fill="#92400E">L_seg (labeled, CE)</text>
+
+  <rect x="878" y="160" width="175" height="35" rx="5" fill="#fff" stroke="#FCD34D"/>
+  <text x="965" y="182" text-anchor="middle" font-size="11" fill="#92400E">L_seg (mixed, CE)</text>
+
+  <rect x="878" y="205" width="175" height="35" rx="5" fill="#fff" stroke="#FCD34D"/>
+  <text x="965" y="227" text-anchor="middle" font-size="11" fill="#92400E">L_boundary (affinity)</text>
+
+  <rect x="878" y="250" width="175" height="35" rx="5" fill="#fff" stroke="#FCD34D"/>
+  <text x="965" y="272" text-anchor="middle" font-size="11" fill="#92400E">L_DAPG (proto grouping)</text>
+
+  <rect x="878" y="300" width="175" height="35" rx="5" fill="#fff" stroke="#FCD34D"/>
+  <text x="965" y="322" text-anchor="middle" font-size="11" fill="#92400E">L_corr (via blended p̃)</text>
+
+  <text x="965" y="365" text-anchor="middle" font-size="10" fill="#92400E">λ_boundary = 0.5</text>
+  <text x="965" y="380" text-anchor="middle" font-size="10" fill="#E11D48" font-weight="bold">λ_proto = 0.05 (halved)</text>
+  <text x="965" y="395" text-anchor="middle" font-size="10" fill="#92400E">threshold = 0.968</text>
+
+  <!-- Arrows to losses -->
+  <line x1="550" y1="305" x2="875" y2="132" stroke="#D97706" stroke-width="1" marker-end="url(#arr-o)"/>
+  <line x1="820" y1="385" x2="875" y2="177" stroke="#D97706" stroke-width="1" marker-end="url(#arr-o)"/>
+  <line x1="820" y1="395" x2="875" y2="222" stroke="#D97706" stroke-width="1" marker-end="url(#arr-o)"/>
+  <line x1="300" y1="550" x2="875" y2="267" stroke="#D97706" stroke-width="1" marker-end="url(#arr-o)"/>
+
+  <!-- ============================================================ -->
+  <!-- Optimizer Box -->
+  <!-- ============================================================ -->
+  <rect x="600" y="440" width="470" height="130" rx="8" fill="#F9FAFB" stroke="#6B7280" stroke-width="1"/>
+  <text x="835" y="462" text-anchor="middle" font-size="12" font-weight="bold" fill="#374151">AdamW Optimizer (paramwise_cfg)</text>
+
+  <text x="620" y="485" font-size="10" fill="#4B5563">backbone (ResNet-101):</text>
+  <text x="820" y="485" font-size="10" fill="#059669">lr = 6e-5, decay = 0.01</text>
+
+  <text x="620" y="502" font-size="10" fill="#4B5563">decode_head (DeepLabV3+):</text>
+  <text x="820" y="502" font-size="10" fill="#059669">lr = 6e-4 (10×), decay = 0.01</text>
+
+  <text x="620" y="519" font-size="10" fill="#4B5563">dynamic_anchor.prototypes:</text>
+  <text x="820" y="519" font-size="10" fill="#7C3AED" font-weight="bold">lr = 6e-4 (10×), decay = 0</text>
+
+  <text x="620" y="536" font-size="10" fill="#4B5563">dynamic_anchor.quality_net:</text>
+  <text x="820" y="536" font-size="10" fill="#7C3AED">lr = 6e-4 (10×)</text>
+
+  <text x="620" y="556" font-size="10" fill="#4B5563">Adam state reset at iter 1000:</text>
+  <text x="820" y="556" font-size="10" fill="#DC2626" font-weight="bold">m=0, v=0 for Θ_proto only</text>
+
+  <!-- ============================================================ -->
+  <!-- Dimension Trace Legend -->
+  <!-- ============================================================ -->
+  <rect x="30" y="690" width="1040" height="80" rx="8" fill="#F8FAFC" stroke="#CBD5E1" stroke-width="1"/>
+  <text x="550" y="712" text-anchor="middle" font-size="12" font-weight="bold" fill="#334155">Dimension Trace — Solution 2 (Decoder Fused Space)</text>
+
+  <!-- Unified path -->
+  <rect x="55" y="724" width="90" height="26" rx="4" fill="#DBEAFE" stroke="#3B82F6"/>
+  <text x="100" y="742" text-anchor="middle" font-size="9" fill="#1E40AF">ResNet-101</text>
+
+  <text x="152" y="742" font-size="12" fill="#333">→</text>
+
+  <rect x="162" y="724" width="50" height="26" rx="4" fill="#E0E7FF" stroke="#6366F1"/>
+  <text x="187" y="742" text-anchor="middle" font-size="9" fill="#3730A3">ASPP</text>
+
+  <text x="219" y="742" font-size="12" fill="#333">→</text>
+
+  <rect x="228" y="724" width="42" height="26" rx="4" fill="#E0E7FF" stroke="#6366F1"/>
+  <text x="249" y="742" text-anchor="middle" font-size="9" fill="#3730A3">512</text>
+
+  <text x="277" y="742" font-size="10" fill="#333">+ c1(48) →</text>
+
+  <rect x="338" y="724" width="85" height="26" rx="4" fill="#EDE9FE" stroke="#7C3AED" stroke-width="1.5"/>
+  <text x="380" y="742" text-anchor="middle" font-size="9" fill="#5B21B6">sep_bneck</text>
+
+  <text x="430" y="742" font-size="12" fill="#333">→</text>
+
+  <rect x="440" y="724" width="55" height="26" rx="4" fill="#EDE9FE" stroke="#7C3AED" stroke-width="1.5"/>
+  <text x="467" y="742" text-anchor="middle" font-size="9" fill="#5B21B6" font-weight="bold">512-d</text>
+
+  <text x="502" y="742" font-size="12" fill="#7C3AED">→</text>
+
+  <rect x="512" y="724" width="80" height="26" rx="4" fill="#F3E8FF" stroke="#7C3AED"/>
+  <text x="552" y="742" text-anchor="middle" font-size="9" fill="#5B21B6">DynAnchor</text>
+
+  <text x="599" y="742" font-size="12" fill="#7C3AED">→</text>
+
+  <rect x="609" y="724" width="60" height="26" rx="4" fill="#F3E8FF" stroke="#7C3AED"/>
+  <text x="639" y="742" text-anchor="middle" font-size="9" fill="#5B21B6">K×512</text>
+
+  <text x="676" y="742" font-size="12" fill="#333">→</text>
+
+  <rect x="686" y="724" width="70" height="26" rx="4" fill="#EEF2FF" stroke="#6366F1" stroke-width="1.5"/>
+  <text x="721" y="742" text-anchor="middle" font-size="9" fill="#3730A3">conv_seg</text>
+
+  <text x="763" y="742" font-size="12" fill="#333">→</text>
+
+  <rect x="773" y="724" width="55" height="26" rx="4" fill="#FEF3C7" stroke="#D97706"/>
+  <text x="800" y="742" text-anchor="middle" font-size="9" fill="#92400E">N_c</text>
+
+  <text x="845" y="742" font-size="9" fill="#E11D48" font-weight="bold">← ∂L_DAPG flows back through all</text>
+</svg>

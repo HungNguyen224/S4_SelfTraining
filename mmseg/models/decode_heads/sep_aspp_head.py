@@ -77,8 +77,24 @@ class DepthwiseSeparableASPPHead(ASPPHead):
                 norm_cfg=self.norm_cfg,
                 act_cfg=self.act_cfg))
 
-    def forward(self, inputs):
-        """Forward function."""
+    def _fuse_features(self, inputs):
+        """Fuse multi-scale features through ASPP and low-level branch.
+
+        Returns the fused feature map (channels-d) before cls_seg.
+        This method is used by DAPCN-SSL Solution 2 to provide fused
+        decoder features to DynamicAnchorModule.
+
+        Dimension trace (ResNet-101 + DeepLabV3+ default config):
+            inputs[3] (2048-d) → ASPP → 5×512 → cat 2560 → bottleneck 512
+            inputs[0] (256-d)  → c1_bottleneck → 48
+            cat(512, 48) = 560 → sep_bottleneck → 512-d (returned)
+
+        Args:
+            inputs (list[Tensor]): Multi-scale encoder features.
+
+        Returns:
+            Tensor: Fused features of shape (B, channels, H, W).
+        """
         x = self._transform_inputs(inputs)
         aspp_outs = [
             resize(
@@ -99,5 +115,10 @@ class DepthwiseSeparableASPPHead(ASPPHead):
                 align_corners=self.align_corners)
             output = torch.cat([output, c1_output], dim=1)
         output = self.sep_bottleneck(output)
-        output = self.cls_seg(output)
         return output
+
+    def forward(self, inputs):
+        """Forward function."""
+        x = self._fuse_features(inputs)
+        x = self.cls_seg(x)
+        return x
